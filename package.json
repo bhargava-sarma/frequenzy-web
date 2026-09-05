@@ -1,0 +1,30 @@
+{
+  "name": "frequenzy",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Frequenzy \u2014 a bit-perfect Apple Music-style web client for Navidrome",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/sync-dict.mjs && vite",
+    "build": "node scripts/sync-dict.mjs && tsc -b --noCheck && vite build",
+    "typecheck": "tsc -b",
+    "preview": "vite preview --host 0.0.0.0",
+    "serve": "node server/serve.mjs",
+    "postinstall": "node scripts/sync-dict.mjs"
+  },
+  "dependencies": {
+    "@sglkc/kuroshiro": "^1.0.1",
+    "@sglkc/kuroshiro-analyzer-kuromoji": "^1.0.1",
+    "pinyin-pro": "^3.29.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

@@ -1,0 +1,779 @@
+/* Now-playing bar, full-screen player, lyrics and queue. */
+
+/* --------------------------------------------------------- now playing bar */
+
+.fz-bar {
+  grid-area: player;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(320px, 620px) minmax(180px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  border-top: 1px solid var(--separator);
+  background: var(--glass-tint-strong);
+  backdrop-filter: blur(56px) saturate(190%);
+  -webkit-backdrop-filter: blur(56px) saturate(190%);
+  z-index: 40;
+  position: relative;
+}
+
+.fz-bar__left,
+.fz-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fz-bar__right {
+  justify-content: flex-end;
+}
+
+.fz-transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fz-transport__btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-primary);
+  transition: transform var(--dur-fast) var(--ease-spring), color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.fz-transport__btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.fz-transport__btn:hover {
+  background: var(--bg-hover);
+}
+
+.fz-transport__btn:active {
+  transform: scale(0.86);
+}
+
+.fz-transport__btn--play svg {
+  width: 25px;
+  height: 25px;
+}
+
+.fz-transport__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* The centered "LCD" panel — the piece that most defines the Apple Music look. */
+.fz-lcd {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  height: 52px;
+  padding: 0 11px 0 6px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: background-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+
+.fz-lcd:hover {
+  background: var(--bg-hover);
+}
+
+.fz-lcd:active {
+  transform: scale(0.995);
+}
+
+.fz-lcd__art {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-xs);
+  margin-left: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: transform var(--dur) var(--ease-spring);
+}
+
+.fz-lcd:hover .fz-lcd__art {
+  transform: scale(1.06);
+}
+
+.fz-lcd__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.fz-lcd__title {
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 100%;
+}
+
+.fz-lcd__sub {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  max-width: 100%;
+}
+
+.fz-lcd__time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* The scrubber lives along the bottom edge of the LCD. */
+.fz-lcd__scrub {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 4px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.fz-lcd:hover .fz-lcd__scrub,
+.fz-lcd__scrub.is-active {
+  opacity: 1;
+}
+
+.fz-lcd__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+/* ---------------------------------------------------------------- scrubber */
+
+.fz-scrub {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.fz-scrub__track {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--separator-strong);
+  overflow: hidden;
+  transition: height var(--dur-fast) var(--ease-out);
+}
+
+.fz-scrub:hover .fz-scrub__track,
+.fz-scrub.is-dragging .fz-scrub__track {
+  height: 5px;
+}
+
+.fz-scrub__buffered {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--separator-strong);
+  border-radius: inherit;
+}
+
+.fz-scrub__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--text-secondary);
+  border-radius: inherit;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.fz-scrub:hover .fz-scrub__fill,
+.fz-scrub.is-dragging .fz-scrub__fill {
+  background: var(--accent);
+}
+
+.fz-scrub__knob {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform var(--dur-fast) var(--ease-spring);
+  pointer-events: none;
+}
+
+.fz-scrub:hover .fz-scrub__knob,
+.fz-scrub.is-dragging .fz-scrub__knob {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.fz-scrub__times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-top: 5px;
+}
+
+/* ------------------------------------------------------------------ volume */
+
+.fz-volume {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 116px;
+  padding-left: 4px;
+}
+
+.fz-volume .fz-scrub {
+  flex: 1;
+}
+
+/* --------------------------------------------------------- full screen player */
+
+.fz-player {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #fff;
+  animation: fz-player-in var(--dur-sheet) var(--ease-out);
+}
+
+.fz-player.is-closing {
+  animation: fz-player-out 400ms var(--ease-in-out) forwards;
+}
+
+@keyframes fz-player-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fz-player-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(100%); }
+}
+
+.fz-player__chrome {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 22px;
+  flex: none;
+}
+
+.fz-player__collapse {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: transform var(--dur) var(--ease-spring), background-color var(--dur-fast) var(--ease-out);
+}
+
+.fz-player__collapse:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.fz-player__collapse:active {
+  transform: scale(0.9);
+}
+
+.fz-player__context {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+}
+
+.fz-player__chrome-spacer {
+  flex: 1;
+}
+
+.fz-player__body {
+  position: relative;
+  z-index: 5;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 44px;
+  padding: 0 44px 30px;
+  transition: grid-template-columns var(--dur-slow) var(--ease-out);
+}
+
+.fz-player__body.has-panel {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  justify-items: stretch;
+}
+
+.fz-player__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  width: 100%;
+  max-width: 420px;
+  justify-self: center;
+}
+
+.fz-player__body.has-panel .fz-player__stage {
+  justify-self: end;
+  max-width: 360px;
+}
+
+/* Artwork lifts and settles when playback starts, the way a record drops. */
+.fz-player__art {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: var(--artwork-shadow-lg);
+  transition: transform var(--dur-sheet) var(--ease-spring), box-shadow var(--dur-sheet) var(--ease-out);
+  transform: scale(0.86);
+}
+
+.fz-player__art.is-playing {
+  transform: scale(1);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7), 0 0 90px -20px var(--art-primary);
+}
+
+.fz-player__meta {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.fz-player__meta-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.fz-player__title {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}
+
+.fz-player__artist {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.66);
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.fz-player__artist:hover {
+  color: #fff;
+}
+
+.fz-player__scrub {
+  width: 100%;
+}
+
+.fz-player__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  width: 100%;
+}
+
+.fz-player__controls .fz-transport__btn {
+  color: #fff;
+  width: 44px;
+  height: 44px;
+}
+
+.fz-player__controls .fz-transport__btn svg {
+  width: 26px;
+  height: 26px;
+}
+
+.fz-player__controls .fz-transport__btn--play svg {
+  width: 42px;
+  height: 42px;
+}
+
+.fz-player__extras {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.fz-player__extras .fz-icon-btn {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.fz-player__extras .fz-icon-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.fz-player__extras .fz-icon-btn.is-on {
+  color: #fff;
+}
+
+.fz-player__panel {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: fz-panel-in var(--dur-slow) var(--ease-out);
+  max-width: 620px;
+}
+
+@keyframes fz-panel-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------- lyrics */
+
+.fz-lyrics {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: 6vh 0;
+  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 82%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 82%, transparent);
+}
+
+.fz-lyrics__scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 0 8px;
+}
+
+.fz-lyrics__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.fz-lyric {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.5vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.28;
+  color: rgba(255, 255, 255, 0.32);
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  transition: color var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out),
+    filter var(--dur-slow) var(--ease-out), opacity var(--dur-slow) var(--ease-out);
+  transform-origin: left center;
+  cursor: pointer;
+  filter: blur(0.6px);
+  opacity: 0.85;
+}
+
+.fz-lyric:hover {
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* The active line snaps forward: full white, slightly larger, perfectly sharp. */
+.fz-lyric.is-active {
+  color: #fff;
+  transform: scale(1.02);
+  filter: none;
+  opacity: 1;
+  text-shadow: 0 2px 30px rgba(255, 255, 255, 0.24);
+}
+
+.fz-lyric.is-past {
+  color: rgba(255, 255, 255, 0.26);
+  filter: blur(1.1px);
+  opacity: 0.6;
+}
+
+.fz-lyric.is-next {
+  color: rgba(255, 255, 255, 0.42);
+  filter: blur(0.3px);
+}
+
+.fz-lyric__original {
+  display: block;
+  font-size: 0.62em;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.55;
+  margin-top: 2px;
+  letter-spacing: -0.2px;
+}
+
+.fz-lyric__roman {
+  display: block;
+}
+
+/* Word-level karaoke fill for enhanced LRC sheets. */
+.fz-lyric__word {
+  transition: color 160ms linear, opacity 160ms linear;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.fz-lyric.is-active .fz-lyric__word.is-sung {
+  color: #fff;
+}
+
+/* The dots shown during an instrumental gap. */
+.fz-lyric-dots {
+  display: flex;
+  gap: 10px;
+  padding: 16px 14px;
+}
+
+.fz-lyric-dots span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  animation: fz-dot-breathe 1.5s var(--ease-in-out) infinite;
+}
+
+.fz-lyric-dots span:nth-child(2) { animation-delay: 220ms; }
+.fz-lyric-dots span:nth-child(3) { animation-delay: 440ms; }
+
+@keyframes fz-dot-breathe {
+  0%, 100% { transform: scale(0.72); opacity: 0.42; }
+  50% { transform: scale(1.14); opacity: 1; }
+}
+
+.fz-lyrics__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 10px;
+  flex: none;
+}
+
+.fz-lyrics__source {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.fz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.fz-chip:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.fz-chip.is-on {
+  background: #fff;
+  color: #000;
+  border-color: transparent;
+}
+
+.fz-chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* --------------------------------------------------------------------- queue */
+
+.fz-queue {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 4px;
+}
+
+.fz-queue__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 12px;
+  flex: none;
+}
+
+.fz-queue__title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.fz-queue__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 0 4px 20px;
+}
+
+.fz-queue__list::-webkit-scrollbar {
+  display: none;
+}
+
+.fz-queue__section {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 14px 10px 6px;
+}
+
+.fz-queue-item {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.fz-queue-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fz-queue-item.is-current {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.fz-queue-item.is-dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+}
+
+.fz-queue-item.is-drop-target {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.fz-queue-item__art {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-xs);
+}
+
+.fz-queue-item__text {
+  min-width: 0;
+}
+
+.fz-queue-item__title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fz-queue-item__sub {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.fz-queue-item__handle {
+  opacity: 0;
+  color: rgba(255, 255, 255, 0.5);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.fz-queue-item:hover .fz-queue-item__handle {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------- narrow full-screen player */
+
+@media (max-width: 1080px) {
+  .fz-player__body.has-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 20px;
+    padding: 0 20px 20px;
+  }
+
+  .fz-player__body.has-panel .fz-player__stage {
+    justify-self: center;
+    max-width: 260px;
+  }
+
+  .fz-player__body.has-panel .fz-player__art {
+    max-width: 190px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .fz-bar {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .fz-bar__left {
+    display: none;
+  }
+
+  .fz-lcd {
+    grid-template-columns: 40px 1fr;
+  }
+
+  .fz-lcd__time {
+    display: none;
+  }
+
+  .fz-player__body {
+    padding: 0 20px 16px;
+    gap: 20px;
+  }
+
+  .fz-player__controls {
+    gap: 18px;
+  }
+
+  .fz-volume {
+    display: none;
+  }
+}

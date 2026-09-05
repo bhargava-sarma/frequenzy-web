@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Frequenzy" />
+    <meta name="description" content="Frequenzy — lossless Navidrome music client" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>Frequenzy</title>
+  </head>
+  <body>
+    <!-- Liquid-glass refraction filters. Referenced from CSS via url(#...) -->
+    <svg class="fz-filter-defs" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="fz-liquid" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise">
+            <animate attributeName="baseFrequency" dur="34s" values="0.008 0.012;0.012 0.008;0.008 0.012" repeatCount="indefinite" />
+          </feTurbulence>
+          <feGaussianBlur in="noise" stdDeviation="8" result="softNoise" />
+          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="16" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="fz-liquid-strong" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.004 0.009" numOctaves="3" seed="19" result="noise">
+            <animate attributeName="baseFrequency" dur="48s" values="0.004 0.009;0.010 0.004;0.004 0.009" repeatCount="indefinite" />
+          </feTurbulence>
+          <feGaussianBlur in="noise" stdDeviation="14" result="softNoise" />
+          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="42" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="fz-grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+      </defs>
+    </svg>
+
+    <div id="root"></div>
+
+    <div id="fz-boot">
+      <div class="fz-boot-mark">
+        <svg viewBox="0 0 120 120" width="76" height="76" aria-hidden="true">
+          <defs>
+            <linearGradient id="fzBootGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ff5f6d" />
+              <stop offset="100%" stop-color="#fa243c" />
+            </linearGradient>
+          </defs>
+          <g fill="none" stroke="url(#fzBootGrad)" stroke-width="9" stroke-linecap="round">
+            <path d="M26 74 V46"><animate attributeName="d" dur="1.1s" repeatCount="indefinite" values="M26 74 V46;M26 82 V38;M26 74 V46" /></path>
+            <path d="M48 84 V36"><animate attributeName="d" dur="1.1s" begin="0.18s" repeatCount="indefinite" values="M48 84 V36;M48 70 V50;M48 84 V36" /></path>
+            <path d="M70 78 V42"><animate attributeName="d" dur="1.1s" begin="0.36s" repeatCount="indefinite" values="M70 78 V42;M70 88 V32;M70 78 V42" /></path>
+            <path d="M92 70 V50"><animate attributeName="d" dur="1.1s" begin="0.54s" repeatCount="indefinite" values="M92 70 V50;M92 80 V40;M92 70 V50" /></path>
+          </g>
+        </svg>
+      </div>
+      <div class="fz-boot-name">Frequenzy</div>
+    </div>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
