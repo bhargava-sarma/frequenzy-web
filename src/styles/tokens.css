@@ -51,6 +51,20 @@
   --bar-height: 76px;
   --topbar-height: 54px;
 
+  /* Device safe areas. Zero everywhere except notched phones and PWAs. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Compact shell metrics. */
+  --tabbar-height: 52px;
+  --miniplayer-height: 58px;
+  /* Everything a compact page must clear at the bottom. */
+  --compact-dock: calc(var(--tabbar-height) + var(--miniplayer-height) + var(--safe-bottom));
+  /* Apple's minimum comfortable touch target. */
+  --tap: 44px;
+
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter',
     'Segoe UI Variable', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter',

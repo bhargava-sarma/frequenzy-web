@@ -18,13 +18,24 @@ import {
   type ReactNode,
 } from 'react';
 
-import { coverArtUrl, scrobble as apiScrobble, streamUrl } from '../lib/subsonic';
+import {
+  coverArtUrl, getRandomSongs, getSimilarSongs, scrobble as apiScrobble, streamUrl,
+} from '../lib/subsonic';
 import { connection } from '../lib/connection';
+import { isDownloaded, localStreamUrl } from '../lib/downloads';
 import { songArtist } from '../lib/format';
+import { recordPlay } from '../lib/history';
 import type { Song } from '../lib/types';
 import { useSettings } from './settings';
 
 export type RepeatMode = 'off' | 'all' | 'one';
+
+/** A sleep timer either counts down or waits for the track to finish. */
+export interface SleepTimer {
+  mode: 'countdown' | 'endOfTrack';
+  /** Epoch ms the timer fires; ignored for 'endOfTrack'. */
+  endsAt: number;
+}
 
 export interface PlaybackContextInfo {
   /** "Album", "Playlist", "Artist" — shown as "Playing from Album". */
@@ -46,6 +57,10 @@ export interface PlayerSnapshot {
   muted: boolean;
   shuffle: boolean;
   repeat: RepeatMode;
+  autoplay: boolean;
+  sleepTimer: SleepTimer | null;
+  /** True while autoplay is fetching more music to keep the queue alive. */
+  extending: boolean;
   context: PlaybackContextInfo | null;
   error: string | null;
 }
@@ -64,6 +79,8 @@ export interface PlayerActions {
   toggleMute: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  toggleAutoplay: () => void;
+  setSleepTimer: (timer: SleepTimer | null) => void;
   playNext: (songs: Song[]) => void;
   playLater: (songs: Song[]) => void;
   removeAt: (index: number) => void;
@@ -129,6 +146,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false);
   const [shuffle, setShuffle] = useState(persisted.current?.shuffle ?? false);
   const [repeat, setRepeat] = useState<RepeatMode>(persisted.current?.repeat ?? 'off');
+  const [autoplay, setAutoplay] = useState(settings.autoplay);
+  const [sleepTimer, setSleepTimerState] = useState<SleepTimer | null>(null);
+  const [extending, setExtending] = useState(false);
   const [context, setContext] = useState<PlaybackContextInfo | null>(persisted.current?.context ?? null);
   const [error, setError] = useState<string | null>(null);
 
@@ -165,25 +185,55 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   /* ------------------------------------------------------------- persistence */
 
+  /**
+   * Persisting has to be split in two.
+   *
+   * `currentTime` ticks several times a second, so debouncing the whole payload
+   * on it meant the timer was cleared before it ever fired and nothing was ever
+   * written while music was playing. Queue shape is saved as it changes;
+   * playback position is throttled separately and flushed when the page goes
+   * away.
+   */
+  const latest = useRef({ queue, original, index, currentTime, shuffle, repeat, context });
+  latest.current = { queue, original, index, currentTime, shuffle, repeat, context };
+
+  const persistNow = useCallback(() => {
+    const state = latest.current;
+    try {
+      const payload: PersistedQueue = {
+        queue: state.queue.slice(0, 500),
+        original: state.original.slice(0, 500),
+        index: state.index,
+        time: state.currentTime,
+        shuffle: state.shuffle,
+        repeat: state.repeat,
+        context: state.context,
+      };
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(payload));
+    } catch {
+      /* quota or private mode — playback is unaffected */
+    }
+  }, []);
+
+  // Queue shape: write shortly after it settles.
   useEffect(() => {
-    const handle = setTimeout(() => {
-      try {
-        const payload: PersistedQueue = {
-          queue: queue.slice(0, 500),
-          original: original.slice(0, 500),
-          index,
-          time: currentTime,
-          shuffle,
-          repeat,
-          context,
-        };
-        localStorage.setItem(QUEUE_KEY, JSON.stringify(payload));
-      } catch {
-        /* quota or private mode — playback is unaffected */
-      }
-    }, 1000);
+    const handle = setTimeout(persistNow, 400);
     return () => clearTimeout(handle);
-  }, [queue, original, index, currentTime, shuffle, repeat, context]);
+  }, [queue, original, index, shuffle, repeat, context, persistNow]);
+
+  // Position: a slow heartbeat, plus a flush when the page is hidden or closed.
+  useEffect(() => {
+    const handle = setInterval(persistNow, 5000);
+    const flush = () => persistNow();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      clearInterval(handle);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
+      persistNow();
+    };
+  }, [persistNow]);
 
   /* ---------------------------------------------------------------- playback */
 
@@ -191,6 +241,30 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (song: Song) => streamUrl(song.id, { raw: !settings.allowTranscoding }),
     [settings.allowTranscoding],
   );
+
+  /**
+   * Blob URLs handed out for downloaded tracks. They pin the bytes in memory,
+   * so each is revoked as soon as the element stops pointing at it.
+   */
+  const objectUrls = useRef(new Map<string, string>());
+  const releaseObjectUrl = useCallback((songId: string) => {
+    const url = objectUrls.current.get(songId);
+    if (url) {
+      URL.revokeObjectURL(url);
+      objectUrls.current.delete(songId);
+    }
+  }, []);
+
+  useEffect(() => {
+    const urls = objectUrls.current;
+    return () => {
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
+
+  /** Guards against a fast skip resolving an older track's source last. */
+  const loadToken = useRef(0);
 
   const advance = useRef<() => void>(() => {});
 
@@ -230,16 +304,38 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!el) return;
       setLoading(true);
       setError(null);
-      el.src = srcFor(song);
       el.volume = muted ? 0 : volume;
       seekOnLoad.current = startAt || null;
-      el.load();
-      if (autoplay) {
-        void el.play().catch(() => {
-          setPlaying(false);
-          setLoading(false);
+
+      const token = ++loadToken.current;
+      const begin = (src: string) => {
+        // A newer load started while we were resolving; drop this one.
+        if (token !== loadToken.current) return;
+        el.src = src;
+        el.load();
+        if (autoplay) {
+          void el.play().catch(() => {
+            setPlaying(false);
+            setLoading(false);
+          });
+        }
+      };
+
+      // A downloaded track plays from disk, which also means it plays with no
+      // server in reach at all.
+      if (isDownloaded(song.id)) {
+        void localStreamUrl(song.id).then((url) => {
+          if (url) {
+            objectUrls.current.set(song.id, url);
+            begin(url);
+          } else {
+            begin(srcFor(song));
+          }
         });
+        return;
       }
+
+      begin(srcFor(song));
     },
     [activeEl, idleEl, muted, srcFor, volume],
   );
@@ -252,21 +348,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (lastLoadedId.current === current.id) return;
+    if (lastLoadedId.current) releaseObjectUrl(lastLoadedId.current);
     lastLoadedId.current = current.id;
 
     const startAt = seekOnLoad.current ?? 0;
-    const autoplay = !suppressAutoplay.current;
+    const shouldAutoplay = !suppressAutoplay.current;
     suppressAutoplay.current = false;
     seekOnLoad.current = null;
 
     setCurrentTime(startAt);
     setDuration(current.duration ?? 0);
-    load(current, autoplay, startAt);
+    load(current, shouldAutoplay, startAt);
 
-    if (settings.scrobble && autoplay) {
+    recordPlay(current);
+    if (settings.scrobble && shouldAutoplay) {
       void apiScrobble(current.id, false).catch(() => {});
     }
-  }, [current, load, settings.scrobble]);
+  }, [current, load, releaseObjectUrl, settings.scrobble]);
 
   /* ------------------------------------------------------------ element wiring */
 
@@ -404,11 +502,45 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [activeEl, index, queue.length, repeat]);
 
+  /**
+   * Autoplay: when the queue runs out, keep the music going with songs like the
+   * one that just finished. Falls back to a random pull if the server has no
+   * similarity data for that track.
+   */
+  const extendQueue = useCallback(async (): Promise<boolean> => {
+    const seed = queue[queue.length - 1];
+    if (!seed) return false;
+    setExtending(true);
+    try {
+      const known = new Set(queue.map((song) => song.id));
+      let more = await getSimilarSongs(seed.id, 40).catch(() => [] as Song[]);
+      more = more.filter((song) => !known.has(song.id));
+      if (more.length === 0) {
+        const random = await getRandomSongs({ size: 40, genre: seed.genre }).catch(() => [] as Song[]);
+        more = random.filter((song) => !known.has(song.id));
+      }
+      if (more.length === 0) return false;
+      setQueue((prev) => [...prev, ...more]);
+      return true;
+    } finally {
+      setExtending(false);
+    }
+  }, [queue]);
+
   // `advance` is what the `ended` handler calls; kept in a ref so the listener
   // never goes stale.
   useEffect(() => {
     advance.current = () => {
       const el = activeEl();
+
+      // An end-of-track sleep timer stops here rather than moving on.
+      if (sleepTimer?.mode === 'endOfTrack') {
+        setSleepTimerState(null);
+        setPlaying(false);
+        el?.pause();
+        return;
+      }
+
       if (repeat === 'one' && el) {
         el.currentTime = 0;
         void el.play().catch(() => {});
@@ -422,10 +554,51 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setIndex(0);
         return;
       }
+      if (autoplay) {
+        const at = index;
+        void extendQueue().then((extended) => {
+          if (extended) setIndex(at + 1);
+          else {
+            setPlaying(false);
+            setCurrentTime(0);
+          }
+        });
+        return;
+      }
       setPlaying(false);
       setCurrentTime(0);
     };
-  }, [activeEl, index, queue.length, repeat]);
+  }, [activeEl, autoplay, extendQueue, index, queue.length, repeat, sleepTimer]);
+
+  /* Sleep timer countdown. Fades out rather than cutting off abruptly. */
+  useEffect(() => {
+    if (!sleepTimer || sleepTimer.mode !== 'countdown') return;
+    const remaining = sleepTimer.endsAt - Date.now();
+    if (remaining <= 0) {
+      setSleepTimerState(null);
+      activeEl()?.pause();
+      return;
+    }
+    const handle = setTimeout(() => {
+      const el = activeEl();
+      setSleepTimerState(null);
+      if (!el) return;
+      // A three-second fade, then pause and restore the volume for next time.
+      const from = el.volume;
+      const steps = 30;
+      let step = 0;
+      const fade = setInterval(() => {
+        step += 1;
+        el.volume = Math.max(0, from * (1 - step / steps));
+        if (step >= steps) {
+          clearInterval(fade);
+          el.pause();
+          el.volume = from;
+        }
+      }, 100);
+    }, remaining);
+    return () => clearTimeout(handle);
+  }, [activeEl, sleepTimer]);
 
   // Pre-buffer the next track as we approach the end of this one.
   useEffect(() => {
@@ -436,11 +609,56 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (preloadedId.current === upcoming.id) return;
     const idle = idleEl();
     if (!idle) return;
-    idle.src = srcFor(upcoming);
-    idle.volume = muted ? 0 : volume;
-    idle.load();
     preloadedId.current = upcoming.id;
+    idle.volume = muted ? 0 : volume;
+    if (isDownloaded(upcoming.id)) {
+      void localStreamUrl(upcoming.id).then((url) => {
+        if (preloadedId.current !== upcoming.id) return;
+        if (url) objectUrls.current.set(upcoming.id, url);
+        idle.src = url ?? srcFor(upcoming);
+        idle.load();
+      });
+      return;
+    }
+    idle.src = srcFor(upcoming);
+    idle.load();
   }, [current, currentTime, duration, idleEl, index, muted, queue, repeat, srcFor, volume]);
+
+  /**
+   * Crossfade. The next track is already buffered on the idle element, so we
+   * start it early and ramp the two volumes past each other. The old element's
+   * `ended` event still drives the advance, which lands exactly when the fade
+   * completes.
+   */
+  useEffect(() => {
+    const seconds = Math.min(settings.crossfadeSeconds, PRELOAD_LEAD - 2);
+    const idle = idleEl();
+    const active = activeEl();
+    if (!idle || !active) return;
+
+    const target = muted ? 0 : volume;
+    const remaining = duration - currentTime;
+    const eligible =
+      seconds > 0 && current && duration > 0 && repeat !== 'one' && preloadedId.current !== null;
+
+    if (!eligible || remaining > seconds || remaining <= 0) {
+      // Outside the window — including after a seek backwards — put things back.
+      if (!idle.paused) {
+        idle.pause();
+        idle.currentTime = 0;
+      }
+      if (active.volume !== target) active.volume = target;
+      return;
+    }
+
+    const progress = Math.min(1, Math.max(0, 1 - remaining / seconds));
+    active.volume = target * (1 - progress);
+    idle.volume = target * progress;
+    if (idle.paused && playing) void idle.play().catch(() => {});
+  }, [
+    activeEl, current, currentTime, duration, idleEl, muted, playing, repeat,
+    settings.crossfadeSeconds, volume,
+  ]);
 
   const play = useCallback(() => {
     const el = activeEl();
@@ -547,6 +765,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const cycleRepeat = useCallback(() => {
     setRepeat((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'));
   }, []);
+
+  const toggleAutoplay = useCallback(() => {
+    setAutoplay((prev) => {
+      updateSettings({ autoplay: !prev });
+      return !prev;
+    });
+  }, [updateSettings]);
+
+  const setSleepTimer = useCallback((timer: SleepTimer | null) => setSleepTimerState(timer), []);
 
   const playNext = useCallback(
     (songs: Song[]) => {
@@ -713,6 +940,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       toggleMute,
       toggleShuffle,
       cycleRepeat,
+      toggleAutoplay,
+      setSleepTimer,
       playNext,
       playLater,
       removeAt,
@@ -722,19 +951,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }),
     [
       clearQueue, cycleRepeat, jumpTo, moveInQueue, next, pause, play, playLater,
-      playNext, playQueue, playSong, previous, removeAt, seek, seekBy, setVolume,
-      toggle, toggleMute, toggleShuffle,
+      playNext, playQueue, playSong, previous, removeAt, seek, seekBy,
+      setSleepTimer, setVolume, toggle, toggleAutoplay, toggleMute, toggleShuffle,
     ],
   );
 
   const value = useMemo<PlayerContextValue>(
     () => ({
       queue, index, current, playing, loading, currentTime, duration, buffered,
-      volume, muted, shuffle, repeat, context, error, actions,
+      volume, muted, shuffle, repeat, autoplay, sleepTimer, extending, context,
+      error, actions,
     }),
     [
-      actions, buffered, context, current, currentTime, duration, error, index,
-      loading, muted, playing, queue, repeat, shuffle, volume,
+      actions, autoplay, buffered, context, current, currentTime, duration, error,
+      extending, index, loading, muted, playing, queue, repeat, shuffle,
+      sleepTimer, volume,
     ],
   );
 

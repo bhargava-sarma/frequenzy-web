@@ -7,9 +7,9 @@ import { Artwork } from './Artwork';
 import { ConnectionBadge } from './ConnectionBadge';
 import { useContextMenu } from './ContextMenu';
 import {
-  AlbumIcon, ArtistIcon, BrowseIcon, ClockIcon, GenreIcon, HeartIcon,
-  ListenNowIcon, NoteIcon, PlaylistIcon, PlusIcon, RadioIcon, SearchIcon,
-  SettingsIcon,
+  AlbumIcon, ArtistIcon, BrowseIcon, ClockIcon, DownloadIcon, GenreIcon,
+  HeartIcon, HistoryIcon, ListenNowIcon, NoteIcon, PlaylistIcon, PlusIcon,
+  RadioIcon, SearchIcon, SettingsIcon,
 } from './Icons';
 import { getPlaylist } from '../lib/subsonic';
 import { useDialogs } from '../state/dialogs';
@@ -24,11 +24,13 @@ const PRIMARY = [
 
 const LIBRARY = [
   { to: '/library/recent', label: 'Recently Added', icon: <ClockIcon /> },
+  { to: '/library/history', label: 'Recently Played', icon: <HistoryIcon /> },
   { to: '/library/artists', label: 'Artists', icon: <ArtistIcon /> },
   { to: '/library/albums', label: 'Albums', icon: <AlbumIcon /> },
   { to: '/library/songs', label: 'Songs', icon: <NoteIcon /> },
   { to: '/library/genres', label: 'Genres', icon: <GenreIcon /> },
   { to: '/library/favourites', label: 'Favourites', icon: <HeartIcon /> },
+  { to: '/library/downloads', label: 'Downloaded', icon: <DownloadIcon /> },
 ];
 
 export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {

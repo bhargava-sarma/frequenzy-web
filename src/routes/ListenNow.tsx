@@ -44,7 +44,18 @@ export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
   };
 
   return (
-    <Page title={greeting()} subtitle="Everything in your library, straight from the source." onMenuClick={onMenuClick}>
+    <Page
+      title={greeting()}
+      subtitle="Everything in your library, straight from the source."
+      onMenuClick={onMenuClick}
+      onRefresh={() => {
+        recent.reload();
+        newest.reload();
+        frequent.reload();
+        random.reload();
+        starred.reload();
+      }}
+    >
       {spotlight && (
         <section className="fz-section">
           <div

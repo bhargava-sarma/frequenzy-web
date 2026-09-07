@@ -6,8 +6,9 @@
  * always gets the same colour.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { coverArtUrl } from '../lib/subsonic';
+import { localArtUrl } from '../lib/downloads';
 import { hashHue, initials } from '../lib/format';
 
 interface ArtworkProps {
@@ -20,12 +21,34 @@ interface ArtworkProps {
 }
 
 export function Artwork({ coverArt, name, size = 300, className = '', rounded, children }: ArtworkProps) {
-  const src = coverArtUrl(coverArt, size);
+  const remote = coverArtUrl(coverArt, size);
   const [loaded, setLoaded] = useState(false);
+  const [src, setSrc] = useState(remote);
+  const objectUrl = useRef<string | null>(null);
 
   useEffect(() => {
     setLoaded(false);
-  }, [src]);
+    setSrc(remote);
+  }, [remote]);
+
+  // Blob URLs created for the offline fallback are ours to release.
+  useEffect(
+    () => () => {
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    },
+    [],
+  );
+
+  /** The server is unreachable — try the copy stored with a download. */
+  const onError = async () => {
+    setLoaded(false);
+    if (!coverArt || objectUrl.current) return;
+    const local = await localArtUrl(coverArt);
+    if (local) {
+      objectUrl.current = local;
+      setSrc(local);
+    }
+  };
 
   return (
     <div
@@ -42,7 +65,7 @@ export function Artwork({ coverArt, name, size = 300, className = '', rounded, c
           draggable={false}
           className={loaded ? 'is-loaded' : ''}
           onLoad={() => setLoaded(true)}
-          onError={() => setLoaded(false)}
+          onError={() => void onError()}
         />
       )}
       {children}

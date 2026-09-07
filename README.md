@@ -20,15 +20,44 @@ It re-races whenever the network moves — coming back from the background, a `n
 change, an `online` event, a failed request, or every four minutes — so walking out of the house
 mid-song simply continues on Tailscale.
 
-**The Apple Music interface.** Sidebar navigation, the centred LCD transport display, hover-to-play
-artwork, the full-screen player with artwork-derived ambient lighting, drag-to-reorder Up Next,
-context menus everywhere, and liquid-glass panels with real refraction (an SVG displacement map,
-not just a blur).
+**Two interfaces, not one shrunk down.** On desktop: sidebar navigation, the centred LCD transport,
+hover-to-play artwork, click/shift/cmd multi-select with a batch toolbar. On a phone: a bottom tab
+bar, a mini player you flick up to open, a full player you pull down to dismiss, rows you swipe
+sideways to act on, and long-press action sheets. Both share liquid-glass panels with real
+refraction — an SVG displacement map, not just a blur — and a full-screen player lit by colours
+pulled out of the artwork.
 
 **Synced lyrics with romanization.** Lyrics come from your server first (embedded tags or `.lrc`
 sidecars, via the OpenSubsonic `getLyricsBySongId` endpoint) and fall back to
 [LRCLIB](https://lrclib.net/). Non-Latin lyrics are **transliterated, never translated** — 사랑해요
 becomes "saranghaeyo", not "I love you" — with the original line kept above the reading.
+
+**Offline downloads.** Albums, playlists and single tracks can be kept on the device. The original
+bytes go into IndexedDB and play back from there, so a downloaded album works with no server in
+reach at all. IndexedDB rather than the Cache API on purpose: the Cache API is restricted to secure
+contexts, and Frequenzy is served over plain HTTP so it can reach a plain-HTTP Navidrome.
+
+---
+
+## Gestures and shortcuts
+
+On a phone:
+
+| Gesture | What it does |
+| --- | --- |
+| Swipe a track **left** | Play Next / Play Last (and Remove, inside a playlist) |
+| Swipe a track **right** | Favourite, or add to a playlist |
+| Swipe far in either direction | Runs the first action without lifting your finger |
+| **Long-press** a track | Opens the full action sheet, headed by what you pressed |
+| Swipe the **mini player** up | Opens the full player |
+| Swipe the **mini player** sideways | Previous / next track |
+| Pull the **player** down | Dismisses it |
+| Swipe the **artwork** sideways | Previous / next track |
+| **Pull down** on a list | Refreshes it |
+| Drag a queue row's grip | Reorders the queue |
+
+On desktop, click selects a row, ⇧-click extends the selection and ⌘/Ctrl-click toggles one; a
+floating toolbar then plays, queues, favourites or playlists everything selected at once.
 
 ---
 
@@ -143,6 +172,8 @@ a lyric actually contains kanji, and it is deliberately not committed to git.
 | `R` | Cycle repeat |
 | `F` | Full-screen player |
 | `⌘` / `Ctrl` + `F` | Search |
+| `⌘` / `Ctrl` + `A` | Select every track in the list |
+| `Esc` | Clear the selection, or close the player |
 
 Media keys and the OS lock screen work through the Media Session API.
 
@@ -164,9 +195,14 @@ src/
     player.tsx       dual-element playback engine, queue, Media Session, scrobbling
     library.tsx      playlists and favourites, shared app-wide
     settings.tsx     preferences
-  components/        interface
+    downloads.ts     offline storage in IndexedDB, and blob-URL playback
+    history.ts       local "Recently Played"
+  hooks/
+    useGestures.ts   swipe, long-press, sheet drag, pull-to-refresh, drag-reorder
+    useLayout.ts     compact vs regular shell
+  components/        interface, with mobile/ for the tab bar and mini player
   routes/            pages
-  styles/            design tokens, liquid glass, layout, player
+  styles/            design tokens, liquid glass, layout, player, mobile shell
 server/serve.mjs     static host with optional Subsonic proxy
 ```
 
@@ -174,11 +210,18 @@ server/serve.mjs     static host with optional Subsonic proxy
 
 Two `<audio>` elements take turns. While one plays, the other pre-buffers the next track starting
 20 seconds before the current one ends; at the track boundary the engine swaps to the element that
-is already loaded, so the gap between tracks is a swap rather than a fresh connection.
+is already loaded, so the gap between tracks is a swap rather than a fresh connection. Crossfade
+uses the same pair — the incoming track starts early and the two volumes ramp past each other.
 
 The elements are deliberately kept out of the DOM and out of the Web Audio graph — routing through
 `AudioContext` would resample everything to the context's rate, which is exactly the loss this app
 exists to avoid.
+
+**Autoplay** keeps things going when the queue empties: it asks the server for songs similar to the
+last one played, falling back to a random pull from the same genre when there is no similarity data.
+
+**The sleep timer** counts down or waits for the end of the current track, then fades out over three
+seconds rather than cutting off.
 
 ---
 
@@ -186,10 +229,11 @@ exists to avoid.
 
 Everything is in **Settings**:
 
-- **Playback** — lossless passthrough (on by default), scrobbling
+- **Playback** — lossless passthrough (on by default), scrobbling, autoplay, crossfade
 - **Lyrics** — romanization mode, whether to show the original script, pinyin tone marks
 - **Appearance** — theme, liquid glass, ambient artwork colour, reduce motion
 - **Servers** — add, edit, reorder and enable/disable addresses; see live probe results
+- **Downloads** — how much is stored on this device, and a way to clear it
 - **Library** — trigger a Navidrome rescan
 - **Account** — sign out
 

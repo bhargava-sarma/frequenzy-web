@@ -6,6 +6,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+import { ActionSheet, type ActionSheetHeader } from './ActionSheet';
+import { useIsCompact } from '../hooks/useLayout';
+
 export interface MenuItem {
   id: string;
   label: string;
@@ -107,23 +110,45 @@ export function ContextMenu({ x, y, entries, onClose }: ContextMenuProps) {
   );
 }
 
-/** Hook that owns menu open state and its anchor point. */
+/**
+ * Owns menu state and renders whichever presentation suits the device: an
+ * anchored menu under the pointer on desktop, a bottom action sheet on touch.
+ * Callers build one `MenuEntry[]` and never think about it again.
+ */
 export function useContextMenu() {
-  const [state, setState] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
+  const compact = useIsCompact();
+  const [state, setState] = useState<{
+    x: number;
+    y: number;
+    entries: MenuEntry[];
+    header?: ActionSheetHeader;
+  } | null>(null);
 
-  const open = (event: { clientX: number; clientY: number; preventDefault: () => void }, entries: MenuEntry[]) => {
+  const open = (
+    event: { clientX: number; clientY: number; preventDefault: () => void },
+    entries: MenuEntry[],
+    header?: ActionSheetHeader,
+  ) => {
     event.preventDefault();
-    setState({ x: event.clientX, y: event.clientY, entries });
+    setState({ x: event.clientX, y: event.clientY, entries, header });
   };
 
-  const openAt = (element: HTMLElement, entries: MenuEntry[]) => {
+  const openAt = (element: HTMLElement, entries: MenuEntry[], header?: ActionSheetHeader) => {
     const rect = element.getBoundingClientRect();
-    setState({ x: rect.left, y: rect.bottom + 4, entries });
+    setState({ x: rect.left, y: rect.bottom + 4, entries, header });
+  };
+
+  const openAtPoint = (point: { x: number; y: number }, entries: MenuEntry[], header?: ActionSheetHeader) => {
+    setState({ x: point.x, y: point.y, entries, header });
   };
 
   const close = () => setState(null);
 
-  const menu = state ? <ContextMenu x={state.x} y={state.y} entries={state.entries} onClose={close} /> : null;
+  const menu = !state ? null : compact ? (
+    <ActionSheet entries={state.entries} header={state.header} onClose={close} />
+  ) : (
+    <ContextMenu x={state.x} y={state.y} entries={state.entries} onClose={close} />
+  );
 
-  return { open, openAt, close, menu };
+  return { open, openAt, openAtPoint, close, menu };
 }

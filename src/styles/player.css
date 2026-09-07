@@ -777,3 +777,19 @@
     display: none;
   }
 }
+
+/* The queue grip is a drag target, so it must never start a scroll. */
+.fz-queue-item__grip {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: grab;
+  touch-action: none;
+}
+
+.fz-queue-item__grip:active {
+  cursor: grabbing;
+  color: #fff;
+}

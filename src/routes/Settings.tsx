@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import { Page } from '../components/Page';
 import { CheckIcon, PlusIcon, TrashIcon } from '../components/Icons';
+import { formatBytes } from '../lib/format';
+import { getDownloads, isSupported as downloadsSupported, removeAllDownloads, totalBytes } from '../lib/downloads';
 import { connection } from '../lib/connection';
 import { DEFAULT_CANDIDATES, normalizeBase, type ServerCandidate } from '../lib/endpoint';
 import { getCredentials, setCredentials, startScan } from '../lib/subsonic';
@@ -81,7 +83,58 @@ export function Settings({ onSignedOut, onMenuClick }: { onSignedOut: () => void
         <Row title="Scrobble plays" desc="Report listens back to Navidrome (and anything it forwards to).">
           <Toggle label="Scrobble plays" on={settings.scrobble} onChange={(on) => update({ scrobble: on })} />
         </Row>
+
+        <Row
+          title="Autoplay"
+          desc="When the queue runs out, keep going with music like the last track."
+        >
+          <Toggle label="Autoplay" on={settings.autoplay} onChange={(on) => update({ autoplay: on })} />
+        </Row>
+
+        <Row
+          title="Crossfade"
+          desc={
+            settings.crossfadeSeconds > 0
+              ? `Tracks overlap by ${settings.crossfadeSeconds} seconds.`
+              : 'Off — tracks change instantly, with no overlap.'
+          }
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 190 }}>
+            <input
+              type="range"
+              min={0}
+              max={12}
+              step={1}
+              value={settings.crossfadeSeconds}
+              aria-label="Crossfade seconds"
+              onChange={(event) => update({ crossfadeSeconds: Number(event.target.value) })}
+              style={{ flex: 1, accentColor: 'var(--accent)' }}
+            />
+            <span style={{ fontSize: 12, width: 26, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+              {settings.crossfadeSeconds || 'Off'}
+            </span>
+          </div>
+        </Row>
       </section>
+
+      {downloadsSupported() && (
+        <section className="fz-section" style={{ maxWidth: 680 }}>
+          <div className="fz-section__head"><h2 className="fz-section__title">Downloads</h2></div>
+          <Row
+            title="Stored on this device"
+            desc={`${getDownloads().length} tracks · ${formatBytes(totalBytes())}. Downloaded tracks play from disk, so they work with no server in reach.`}
+          >
+            <button
+              type="button"
+              className="fz-btn"
+              disabled={getDownloads().length === 0}
+              onClick={() => void removeAllDownloads()}
+            >
+              Remove All
+            </button>
+          </Row>
+        </section>
+      )}
 
       <section className="fz-section" style={{ maxWidth: 680 }}>
         <div className="fz-section__head"><h2 className="fz-section__title">Lyrics</h2></div>

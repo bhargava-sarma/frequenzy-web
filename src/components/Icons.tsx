@@ -371,3 +371,76 @@ export const LanguageIcon = (p: IconProps) => (
     </g>
   </Svg>
 );
+
+export const InfinityIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path
+      d="M8.4 8.6a3.4 3.4 0 1 0 0 6.8c1.5 0 2.5-1 3.6-2.4 1.1-1.4 2.1-2.4 3.6-2.4a3.4 3.4 0 1 1 0 6.8c-1.5 0-2.5-1-3.6-2.4-1.1-1.4-2.1-2.4-3.6-2.4Z"
+      {...stroke}
+    />
+  </Svg>
+);
+
+export const MoonIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M20 14.2A8.4 8.4 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z" {...stroke} />
+  </Svg>
+);
+
+export const SortIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <path d="M4.6 6.6h14.8M6.8 12h10.4M9.6 17.4h4.8" />
+    </g>
+  </Svg>
+);
+
+export const GridIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <rect x="4" y="4" width="6.6" height="6.6" rx="1.6" />
+      <rect x="13.4" y="4" width="6.6" height="6.6" rx="1.6" />
+      <rect x="4" y="13.4" width="6.6" height="6.6" rx="1.6" />
+      <rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.6" />
+    </g>
+  </Svg>
+);
+
+export const ListIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <path d="M8.6 6.4h11M8.6 12h11M8.6 17.6h11" />
+      <circle cx="4.8" cy="6.4" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="4.8" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="4.8" cy="17.6" r="1.1" fill="currentColor" stroke="none" />
+    </g>
+  </Svg>
+);
+
+export const ShareIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <path d="M12 3.6v11" />
+      <path d="m8.2 7.2 3.8-3.6 3.8 3.6" />
+      <path d="M5.4 12.6v6.2a1.6 1.6 0 0 0 1.6 1.6h10a1.6 1.6 0 0 0 1.6-1.6v-6.2" />
+    </g>
+  </Svg>
+);
+
+export const HistoryIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <path d="M3.8 12a8.2 8.2 0 1 0 2.5-5.9" />
+      <path d="M3.6 4.4v4h4" />
+      <path d="M12 7.6V12l3 1.8" />
+    </g>
+  </Svg>
+);
+
+export const FilterIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <path d="M3.8 6.2h16.4l-6.4 7.4v5.2l-3.6 1.8v-7z" />
+    </g>
+  </Svg>
+);

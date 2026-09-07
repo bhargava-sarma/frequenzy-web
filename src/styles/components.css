@@ -967,3 +967,266 @@
   align-items: center;
   gap: 8px;
 }
+
+/* ------------------------------------------------------------ row selection */
+
+/*
+ * Selection is a neutral highlight, not an alert. The accent shows only as a
+ * thin edge, so a run of selected rows reads as "these ones" rather than
+ * "something is wrong with these ones".
+ */
+.fz-track.is-selected {
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.fz-track.is-selected + .fz-track::before,
+.fz-track.is-selected::before {
+  opacity: 0;
+}
+
+.fz-track.is-lifted {
+  opacity: 0.4;
+}
+
+.fz-track.is-drop-target {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* Floating batch-action bar, shown while rows are selected. */
+.fz-selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--bar-height) + 16px);
+  translate: -50% 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px 8px 16px;
+  border-radius: var(--radius-pill);
+  max-width: min(920px, calc(100vw - 40px));
+  animation: fz-selection-in 320ms var(--ease-spring);
+}
+
+@keyframes fz-selection-in {
+  from { opacity: 0; transform: translate(-50%, 14px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.fz-selection-bar__count {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  position: relative;
+  z-index: 3;
+}
+
+.fz-selection-bar__actions {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  position: relative;
+  z-index: 3;
+}
+
+.fz-selection-bar__actions::-webkit-scrollbar {
+  display: none;
+}
+
+.fz-selection-bar__actions .fz-btn {
+  white-space: nowrap;
+  flex: none;
+}
+
+.fz-app--compact .fz-selection-bar {
+  bottom: calc(var(--compact-dock) + 12px);
+  width: calc(100vw - 24px);
+}
+
+/* ------------------------------------------------------------ star ratings */
+
+.fz-stars {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.fz-star {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--text-tertiary);
+  transition: color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring);
+}
+
+.fz-star svg {
+  width: 17px;
+  height: 17px;
+}
+
+.fz-star.is-on {
+  color: #ffc75a;
+}
+
+.fz-star:active {
+  transform: scale(0.82);
+}
+
+/* -------------------------------------------------------------- downloads */
+
+.fz-download-ring {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) var(--p, 0%), var(--separator-strong) 0);
+  position: relative;
+  flex: none;
+}
+
+.fz-download-ring::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+
+.fz-storage {
+  margin-bottom: 22px;
+  max-width: 460px;
+}
+
+.fz-storage__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.fz-storage__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #ff7a5c);
+}
+
+.fz-storage__label {
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------- library toolbar */
+
+.fz-toolbar-filter {
+  width: 170px;
+  flex: none;
+}
+
+.fz-toolbar-sortlabel {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact list rows used by the library's list density. */
+.fz-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.fz-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  position: relative;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.fz-row:hover {
+  background: var(--bg-hover);
+}
+
+.fz-row + .fz-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 62px;
+  right: 8px;
+  height: 1px;
+  background: var(--separator);
+}
+
+.fz-row__art {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-xs);
+  flex: none;
+}
+
+.fz-row__art--round {
+  border-radius: 50%;
+}
+
+.fz-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fz-row__title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fz-row__sub {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* Alphabet rail down the side of the artists list. */
+.fz-alpha {
+  position: fixed;
+  right: 2px;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 3px;
+}
+
+.fz-alpha button {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--accent);
+  padding: 0 3px;
+  opacity: 0.75;
+}
+
+.fz-alpha button:hover,
+.fz-alpha button:active {
+  opacity: 1;
+  transform: scale(1.25);
+}
+
+@media (max-width: 899px) {
+  .fz-toolbar-filter {
+    width: 128px;
+  }
+  .fz-toolbar-sortlabel {
+    display: none;
+  }
+}

@@ -21,6 +21,12 @@ export interface Settings {
   allowTranscoding: boolean;
   volume: number;
   scrobble: boolean;
+  /** Keep playing similar music when the queue runs out. */
+  autoplay: boolean;
+  /** Seconds of overlap between tracks; 0 disables the effect entirely. */
+  crossfadeSeconds: number;
+  /** Library list density, remembered per install. */
+  libraryView: 'grid' | 'list';
 }
 
 const DEFAULTS: Settings = {
@@ -34,6 +40,9 @@ const DEFAULTS: Settings = {
   allowTranscoding: false,
   volume: 1,
   scrobble: true,
+  autoplay: true,
+  crossfadeSeconds: 0,
+  libraryView: 'grid',
 };
 
 const STORAGE_KEY = 'frequenzy.settings.v1';

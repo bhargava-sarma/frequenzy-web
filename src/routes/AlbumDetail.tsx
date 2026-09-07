@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { AlbumCard, Shelf } from '../components/Cards';
 import { Artwork } from '../components/Artwork';
+import { DownloadButton } from '../components/DownloadButton';
 import { Page } from '../components/Page';
 import { TrackList } from '../components/TrackList';
 import { useContextMenu } from '../components/ContextMenu';
@@ -127,6 +128,7 @@ export function AlbumDetail() {
             >
               <HeartIcon filled={starred} />
             </button>
+            <DownloadButton songs={songs} />
             <button
               type="button"
               className="fz-icon-btn"

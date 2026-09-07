@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import { AddToPlaylistDialog } from '../components/AddToPlaylistDialog';
 import { PromptDialog } from '../components/PromptDialog';
+import { SleepTimerDialog } from '../components/SleepTimerDialog';
 import { TrackInfoDialog } from '../components/TrackInfoDialog';
 import type { Song } from '../lib/types';
 
@@ -22,6 +23,7 @@ interface DialogsContextValue {
   addToPlaylist: (songs: Song[]) => void;
   prompt: (request: PromptRequest) => void;
   showTrackInfo: (song: Song) => void;
+  sleepTimerSheet: () => void;
 }
 
 const DialogsContext = createContext<DialogsContextValue | null>(null);
@@ -30,6 +32,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
   const [playlistSongs, setPlaylistSongs] = useState<Song[] | null>(null);
   const [promptRequest, setPromptRequest] = useState<PromptRequest | null>(null);
   const [infoSong, setInfoSong] = useState<Song | null>(null);
+  const [sleepOpen, setSleepOpen] = useState(false);
 
   const addToPlaylist = useCallback((songs: Song[]) => {
     if (songs.length) setPlaylistSongs(songs);
@@ -37,10 +40,11 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
 
   const prompt = useCallback((request: PromptRequest) => setPromptRequest(request), []);
   const showTrackInfo = useCallback((song: Song) => setInfoSong(song), []);
+  const sleepTimerSheet = useCallback(() => setSleepOpen(true), []);
 
   const value = useMemo(
-    () => ({ addToPlaylist, prompt, showTrackInfo }),
-    [addToPlaylist, prompt, showTrackInfo],
+    () => ({ addToPlaylist, prompt, showTrackInfo, sleepTimerSheet }),
+    [addToPlaylist, prompt, showTrackInfo, sleepTimerSheet],
   );
 
   return (
@@ -61,6 +65,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
         />
       )}
       {infoSong && <TrackInfoDialog song={infoSong} onClose={() => setInfoSong(null)} />}
+      {sleepOpen && <SleepTimerDialog onClose={() => setSleepOpen(false)} />}
     </DialogsContext.Provider>
   );
 }

@@ -8,9 +8,10 @@ import { useNavigate } from 'react-router-dom';
 
 import type { MenuEntry } from '../components/ContextMenu';
 import {
-  AlbumIcon, ArtistIcon, DownloadIcon, HeartIcon, InfoIcon, NextIcon,
-  PlaylistIcon, PlusIcon, QueueIcon, TrashIcon,
+  AlbumIcon, ArtistIcon, CheckIcon, DownloadIcon, HeartIcon, InfoIcon, NextIcon,
+  PlaylistIcon, PlusIcon, QueueIcon, ShareIcon, TrashIcon,
 } from '../components/Icons';
+import { downloadSong, isDownloaded, isSupported as downloadsSupported, removeDownload } from '../lib/downloads';
 import { downloadUrl } from '../lib/subsonic';
 import type { Album, Artist, Song } from '../lib/types';
 import { useLibrary } from '../state/library';
@@ -95,15 +96,24 @@ export function useMediaMenu() {
         });
       }
 
-      entries.push(
-        { id: 's3', separator: true },
-        {
-          id: 'download',
-          label: 'Download Original File',
-          icon: <DownloadIcon />,
-          onSelect: () => window.open(downloadUrl(song.id), '_blank'),
-        },
-      );
+      entries.push({ id: 's3', separator: true });
+
+      if (downloadsSupported()) {
+        const offline = isDownloaded(song.id);
+        entries.push({
+          id: 'offline',
+          label: offline ? 'Remove Download' : 'Make Available Offline',
+          icon: offline ? <CheckIcon /> : <DownloadIcon />,
+          onSelect: () => void (offline ? removeDownload(song.id) : downloadSong(song)),
+        });
+      }
+
+      entries.push({
+        id: 'download',
+        label: 'Save Original File…',
+        icon: <DownloadIcon />,
+        onSelect: () => window.open(downloadUrl(song.id), '_blank'),
+      });
 
       if (options.onShowInfo) {
         entries.push({

@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom';
 
 import { ChevronLeftIcon, ChevronRightIcon, GripIcon } from './Icons';
+import { usePullToRefresh } from '../hooks/useGestures';
+import { useIsTouch } from '../hooks/useLayout';
 
 interface PageProps {
   title: string;
@@ -19,12 +21,16 @@ interface PageProps {
   actions?: ReactNode;
   children: ReactNode;
   onMenuClick?: () => void;
+  /** Enables pull-to-refresh on touch devices. */
+  onRefresh?: () => void | Promise<void>;
 }
 
-export function Page({ title, subtitle, hero, actions, children, onMenuClick }: PageProps) {
+export function Page({ title, subtitle, hero, actions, children, onMenuClick, onRefresh }: PageProps) {
   const navigate = useNavigate();
+  const touch = useIsTouch();
   const [stuck, setStuck] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pull = usePullToRefresh(onRefresh ?? (() => {}), !onRefresh || !touch);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -59,7 +65,22 @@ export function Page({ title, subtitle, hero, actions, children, onMenuClick }: 
         {actions}
       </div>
 
-      <div className="fz-page fz-scroll fz-page-enter" ref={scrollRef} onScroll={onScroll}>
+      {onRefresh && touch && (pull.pull > 0 || pull.refreshing) && (
+        <div
+          className={`fz-pull ${pull.ready ? 'is-ready' : ''} ${pull.refreshing ? 'is-refreshing' : ''}`}
+          style={{ transform: `translate(-50%, ${pull.pull}px)`, opacity: Math.min(1, pull.pull / 40) }}
+        >
+          <span className="fz-pull__spinner" />
+        </div>
+      )}
+
+      <div
+        className="fz-page fz-scroll fz-page-enter"
+        ref={scrollRef}
+        onScroll={onScroll}
+        style={pull.pull > 0 ? { transform: `translateY(${pull.pull}px)` } : undefined}
+        {...(onRefresh && touch ? pull.handlers : {})}
+      >
         {hero ?? (
           <header className="fz-page__header">
             <h1 className="fz-page__title">{title}</h1>
