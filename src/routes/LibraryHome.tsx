@@ -41,7 +41,7 @@ export function LibraryHome() {
 
   return (
     <Page title="Library">
-      <div className="fz-linklist">
+      <div className="fz-linklist fz-stagger-fast">
         {SECTIONS.map((section) => (
           <button key={section.to} type="button" className="fz-linkrow" onClick={() => navigate(section.to)}>
             <span className="fz-linkrow__icon">{section.icon}</span>
@@ -77,7 +77,7 @@ export function LibraryHome() {
             No playlists yet — make one with the + above.
           </div>
         ) : (
-          <div className="fz-linklist">
+          <div className="fz-linklist fz-stagger-fast">
             {playlists.map((playlist) => (
               <button
                 key={playlist.id}

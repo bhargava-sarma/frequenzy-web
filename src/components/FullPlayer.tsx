@@ -26,14 +26,12 @@ import {
   RepeatOneIcon, ShuffleIcon, VolumeHighIcon, VolumeLowIcon, VolumeMuteIcon,
 } from './Icons';
 import { formatTime, qualityBadge, songArtist } from '../lib/format';
-import { extractPalette, DEFAULT_PALETTE, type Palette } from '../lib/color';
-import { coverArtUrl } from '../lib/subsonic';
 import { useIsCompact } from '../hooks/useLayout';
 import { useMediaMenu } from '../hooks/useMediaMenu';
+import { useAmbient } from '../state/ambient';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { usePlayer } from '../state/player';
-import { useSettings } from '../state/settings';
 
 export type PlayerPanel = 'none' | 'lyrics' | 'queue';
 
@@ -48,7 +46,6 @@ export function FullPlayer({ panel, onPanelChange, onClose }: FullPlayerProps) {
     current, playing, currentTime, duration, buffered, volume, muted, shuffle,
     repeat, autoplay, sleepTimer, context, actions,
   } = usePlayer();
-  const { settings } = useSettings();
   const { isStarred, toggleStar } = useLibrary();
   const { addToPlaylist, showTrackInfo, sleepTimerSheet } = useDialogs();
   const { songMenu } = useMediaMenu();
@@ -56,7 +53,9 @@ export function FullPlayer({ panel, onPanelChange, onClose }: FullPlayerProps) {
   const navigate = useNavigate();
   const compact = useIsCompact();
 
-  const [palette, setPalette] = useState<Palette>(DEFAULT_PALETTE);
+  // The palette is already extracted once for the whole app; reuse it so the
+  // player and the room behind it are lit by the same source.
+  const { palette } = useAmbient();
   const [closing, setClosing] = useState(false);
   const [artNudge, setArtNudge] = useState(0);
   const [sheetOffset, setSheetOffset] = useState(0);
@@ -68,21 +67,6 @@ export function FullPlayer({ panel, onPanelChange, onClose }: FullPlayerProps) {
     setClosing(true);
     setTimeout(onClose, compact ? 300 : 380);
   };
-
-  // Repaint the ambient wash whenever the artwork changes.
-  useEffect(() => {
-    if (!current?.coverArt || !settings.ambientBackground) {
-      setPalette(DEFAULT_PALETTE);
-      return;
-    }
-    let alive = true;
-    extractPalette(coverArtUrl(current.coverArt, 300)).then((result) => {
-      if (alive) setPalette(result);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [current?.coverArt, settings.ambientBackground]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

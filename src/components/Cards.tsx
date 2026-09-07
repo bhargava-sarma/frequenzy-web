@@ -57,8 +57,12 @@ export function Shelf({ title, link, onLink, children, wide }: {
           </button>
         </div>
       </div>
-      <div className="fz-hscroll" ref={scroller} onScroll={updateEdges}>
-        <div className={`fz-shelf ${wide ? 'fz-shelf--wide' : ''}`}>{children}</div>
+      <div
+        className={`fz-hscroll fz-shelf-scroll ${atStart ? 'is-at-start' : ''} ${atEnd ? 'is-at-end' : ''}`}
+        ref={scroller}
+        onScroll={updateEdges}
+      >
+        <div className={`fz-shelf fz-stagger ${wide ? 'fz-shelf--wide' : ''}`}>{children}</div>
       </div>
     </section>
   );

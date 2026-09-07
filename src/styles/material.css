@@ -1,0 +1,365 @@
+/*
+ * Material.
+ *
+ * Everything here exists to give surfaces somewhere to sit. A blurred pane over
+ * flat black is indistinguishable from a grey rectangle, so the app first gets a
+ * faint, slowly-moving ambient wash in the artwork's colours; then chrome and
+ * cards sample it, and the glass finally reads as glass.
+ */
+
+/* ------------------------------------------------------------- app backdrop */
+
+.fz-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(140% 100% at 50% 0%, #131317 0%, #08080a 55%, #050506 100%);
+}
+
+:root[data-theme='light'] .fz-backdrop {
+  background:
+    radial-gradient(140% 100% at 50% 0%, #ffffff 0%, #f4f4f7 55%, #ececed 100%);
+}
+
+.fz-backdrop__blob {
+  position: absolute;
+  width: 72vmax;
+  height: 72vmax;
+  border-radius: 50%;
+  filter: blur(120px) saturate(160%);
+  /* Deliberately faint: this is the light in the room, not the subject. */
+  opacity: 0.22;
+  will-change: transform;
+  transition: opacity 1.6s var(--ease-out), background 1.6s var(--ease-out);
+}
+
+:root[data-ambient='off'] .fz-backdrop__blob {
+  opacity: 0.13;
+}
+
+:root[data-theme='light'] .fz-backdrop__blob {
+  opacity: 0.2;
+  filter: blur(130px) saturate(140%);
+}
+
+.fz-backdrop__blob:nth-child(1) {
+  background: radial-gradient(circle at 32% 32%, var(--art-primary), transparent 68%);
+  top: -34%;
+  left: -18%;
+  animation: fz-room-a 44s var(--ease-in-out) infinite alternate;
+}
+
+.fz-backdrop__blob:nth-child(2) {
+  background: radial-gradient(circle at 68% 42%, var(--art-secondary), transparent 68%);
+  bottom: -38%;
+  right: -16%;
+  animation: fz-room-b 56s var(--ease-in-out) infinite alternate;
+}
+
+.fz-backdrop__blob:nth-child(3) {
+  background: radial-gradient(circle at 50% 58%, var(--art-tertiary), transparent 68%);
+  top: 24%;
+  right: -22%;
+  animation: fz-room-c 68s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes fz-room-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(10vw, 8vh, 0) scale(1.18); }
+}
+
+@keyframes fz-room-b {
+  from { transform: translate3d(0, 0, 0) scale(1.14); }
+  to { transform: translate3d(-12vw, -9vh, 0) scale(1); }
+}
+
+@keyframes fz-room-c {
+  from { transform: translate3d(0, 0, 0) scale(0.92); }
+  to { transform: translate3d(-8vw, 11vh, 0) scale(1.14); }
+}
+
+/* Darkens the edges so content in the middle stays the brightest thing. */
+.fz-backdrop__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+:root[data-theme='light'] .fz-backdrop__vignette {
+  background: radial-gradient(120% 90% at 50% 45%, transparent 45%, rgba(0, 0, 0, 0.07) 100%);
+}
+
+/* A little grain keeps these very wide gradients from banding on cheap panels. */
+.fz-backdrop__grain {
+  position: absolute;
+  inset: -50%;
+  opacity: 0.035;
+  filter: url(#fz-grain);
+}
+
+/*
+ * The shell floats over the backdrop rather than painting its own black. Every
+ * structural surface that used to carry an opaque background gives it up here.
+ */
+.fz-app,
+.fz-app--compact,
+.fz-content,
+.fz-page {
+  background: transparent;
+}
+
+.fz-app {
+  position: relative;
+  z-index: 1;
+}
+
+/* Content needs to sit above the sidebar's own translucency, not behind it. */
+.fz-page {
+  position: relative;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------- elevation */
+
+:root {
+  /* A four-step scale. Each level is a contact shadow plus an ambient one, so
+     surfaces feel lifted rather than outlined. */
+  --elev-1:
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  --elev-2:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.28);
+  --elev-3:
+    0 4px 10px rgba(0, 0, 0, 0.34),
+    0 18px 48px rgba(0, 0, 0, 0.4);
+  --elev-4:
+    0 8px 20px rgba(0, 0, 0, 0.4),
+    0 34px 90px rgba(0, 0, 0, 0.55);
+  /* The hairline that reads as the lit top edge of a raised surface. */
+  --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='light'] {
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.05);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, 0.07), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --elev-3: 0 4px 10px rgba(0, 0, 0, 0.08), 0 18px 48px rgba(0, 0, 0, 0.12);
+  --elev-4: 0 8px 20px rgba(0, 0, 0, 0.1), 0 34px 90px rgba(0, 0, 0, 0.16);
+  --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ------------------------------------------------------- refined glass panes */
+
+/*
+ * A convincing pane is five layers: what is behind it (blurred and saturated),
+ * a tint, a frosted grain, a specular sheen on the top edge, and a rim that
+ * brightens where light would catch the curve.
+ */
+/*
+ * Defaults only — `:where()` contributes no specificity, so any component that
+ * needs to be fixed, or wants its own corner radius, simply says so and wins.
+ * Setting these at normal weight silently broke every positioned pane (menus,
+ * dialogs, the selection bar) the moment this file moved later in the cascade.
+ */
+:where(.fz-pane) {
+  position: relative;
+  border-radius: var(--radius-lg);
+}
+
+.fz-pane {
+  isolation: isolate;
+  background: var(--glass-tint);
+  backdrop-filter: blur(34px) saturate(200%) brightness(0.82);
+  -webkit-backdrop-filter: blur(34px) saturate(200%) brightness(0.82);
+  box-shadow:
+    var(--elev-2),
+    var(--edge-top),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.fz-pane::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.04) 22%,
+    rgba(255, 255, 255, 0) 46%
+  );
+}
+
+/* Frost: fine grain inside the glass, so it is not a perfectly smooth blur. */
+.fz-pane::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.035;
+  filter: url(#fz-grain);
+}
+
+.fz-pane > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Raised, tappable glass: reacts to the pointer and depresses when pressed. */
+.fz-pane--interactive {
+  transition:
+    transform 340ms var(--ease-out),
+    box-shadow 340ms var(--ease-out),
+    background-color 340ms var(--ease-out);
+}
+
+.fz-pane--interactive:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--elev-3),
+    var(--edge-top),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.fz-pane--interactive:active {
+  transform: translateY(0) scale(0.994);
+  transition-duration: 90ms;
+}
+
+/*
+ * Pointer-tracked specular. The blob follows the cursor across the pane, which
+ * is the cue that sells a surface as reflective rather than printed.
+ */
+.fz-pane--lit::before {
+  background:
+    radial-gradient(
+      340px circle at var(--mx, 50%) var(--my, 0%),
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    linear-gradient(
+      168deg,
+      rgba(255, 255, 255, 0.13) 0%,
+      rgba(255, 255, 255, 0.035) 22%,
+      rgba(255, 255, 255, 0) 46%
+    );
+  transition: background 240ms var(--ease-out);
+}
+
+/* Honest fallbacks: an opaque surface rather than a muddy translucent one. */
+:root[data-glass='off'] .fz-pane {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--bg-elevated);
+}
+
+:root[data-glass='off'] .fz-pane::before,
+:root[data-glass='off'] .fz-pane::after {
+  display: none;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fz-pane {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg-elevated);
+  }
+}
+
+:root[data-theme='light'] .fz-pane {
+  backdrop-filter: blur(34px) saturate(180%) brightness(1.08);
+  -webkit-backdrop-filter: blur(34px) saturate(180%) brightness(1.08);
+}
+
+:root[data-theme='light'] .fz-sidebar,
+:root[data-theme='light'] .fz-bar,
+:root[data-theme='light'] .fz-tabbar,
+:root[data-theme='light'] .fz-mini {
+  backdrop-filter: blur(44px) saturate(190%) brightness(1.1);
+  -webkit-backdrop-filter: blur(44px) saturate(190%) brightness(1.1);
+}
+
+/* --------------------------------------------------------- chrome surfaces */
+
+/*
+ * The sidebar and bars are the app's own glass. They sit over the backdrop, so
+ * they pick up its colour the way vibrancy does on macOS.
+ */
+.fz-sidebar,
+.fz-bar,
+.fz-tabbar,
+.fz-mini {
+  background: var(--chrome-tint);
+  backdrop-filter: blur(44px) saturate(210%) brightness(0.72);
+  -webkit-backdrop-filter: blur(44px) saturate(210%) brightness(0.72);
+}
+
+:root {
+  --chrome-tint: rgba(255, 255, 255, 0.045);
+}
+
+:root[data-theme='light'] {
+  --chrome-tint: rgba(255, 255, 255, 0.62);
+}
+
+:root[data-glass='off'] .fz-sidebar,
+:root[data-glass='off'] .fz-bar,
+:root[data-glass='off'] .fz-tabbar,
+:root[data-glass='off'] .fz-mini {
+  background: var(--bg-elevated);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ------------------------------------------------------------ proportions */
+
+/* The hero stops stretching on very wide windows; past a point the extra width
+   is just a longer walk between the title and the buttons. */
+.fz-hero {
+  max-width: 1180px;
+}
+
+/*
+ * The full-screen player's stage was sized for a laptop and looked marooned on
+ * a big display. It now scales with the window while staying comfortably
+ * within the vertical space the controls need.
+ */
+.fz-player__stage {
+  max-width: min(520px, 42vh);
+}
+
+.fz-player__body.has-panel .fz-player__stage {
+  max-width: min(400px, 38vh);
+}
+
+/*
+ * A scrim under the title bar so content dissolves as it scrolls beneath the
+ * glass rather than colliding with its edge.
+ */
+.fz-topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 26px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.22), transparent);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out);
+}
+
+:root[data-theme='light'] .fz-topbar::after {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.08), transparent);
+}
+
+.fz-topbar.is-stuck::after {
+  opacity: 1;
+}

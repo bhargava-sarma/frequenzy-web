@@ -87,7 +87,7 @@ export function LibraryAlbums({ onMenuClick }: { onMenuClick?: () => void }) {
       }
     >
       {albums.loading ? (
-        <div className="fz-grid">
+        <div className="fz-grid fz-stagger">
           {Array.from({ length: 20 }, (_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : shown.length === 0 ? (
@@ -97,7 +97,7 @@ export function LibraryAlbums({ onMenuClick }: { onMenuClick?: () => void }) {
       ) : settings.libraryView === 'list' ? (
         <AlbumRows albums={shown} />
       ) : (
-        <div className="fz-grid">
+        <div className="fz-grid fz-stagger">
           {shown.map((album) => <AlbumCard key={album.id} album={album} />)}
         </div>
       )}
@@ -109,7 +109,7 @@ export function LibraryAlbums({ onMenuClick }: { onMenuClick?: () => void }) {
 function AlbumRows({ albums }: { albums: Album[] }) {
   const navigate = useNavigate();
   return (
-    <div className="fz-rows">
+    <div className="fz-rows fz-stagger-fast">
       {albums.map((album) => (
         <button
           key={album.id}
@@ -138,7 +138,7 @@ export function LibraryRecent({ onMenuClick }: { onMenuClick?: () => void }) {
   const albums = useAsync((signal) => getAlbumList('newest', { size: 200 }, signal), []);
   return (
     <Page title="Recently Added" subtitle="The newest arrivals on your server." onMenuClick={onMenuClick}>
-      <div className="fz-grid">
+      <div className="fz-grid fz-stagger">
         {albums.loading
           ? Array.from({ length: 20 }, (_, i) => <CardSkeleton key={i} />)
           : (albums.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
@@ -186,7 +186,7 @@ export function LibraryArtists({ onMenuClick }: { onMenuClick?: () => void }) {
       }
     >
       {indexes.loading && (
-        <div className="fz-grid fz-grid--tight">
+        <div className="fz-grid fz-grid--tight fz-stagger">
           {Array.from({ length: 18 }, (_, i) => <CardSkeleton key={i} rounded />)}
         </div>
       )}
@@ -195,7 +195,7 @@ export function LibraryArtists({ onMenuClick }: { onMenuClick?: () => void }) {
         <section key={group.name} className="fz-section" id={`fz-index-${group.name}`}>
           <div className="fz-section__head"><h2 className="fz-section__title">{group.name}</h2></div>
           {settings.libraryView === 'list' ? (
-            <div className="fz-rows">
+            <div className="fz-rows fz-stagger-fast">
               {group.artist.map((artist) => (
                 <button
                   key={artist.id}
@@ -219,7 +219,7 @@ export function LibraryArtists({ onMenuClick }: { onMenuClick?: () => void }) {
               ))}
             </div>
           ) : (
-            <div className="fz-grid fz-grid--tight">
+            <div className="fz-grid fz-grid--tight fz-stagger">
               {group.artist.map((artist) => <ArtistCard key={artist.id} artist={artist} />)}
             </div>
           )}
@@ -332,7 +332,7 @@ export function LibraryGenres({ onMenuClick }: { onMenuClick?: () => void }) {
 
   return (
     <Page title="Genres" subtitle={`${sorted.length} genres in your library`} onMenuClick={onMenuClick}>
-      <div className="fz-grid">
+      <div className="fz-grid fz-stagger">
         {sorted.map((genre) => (
           <button
             key={genre.value}
@@ -389,7 +389,7 @@ export function GenreDetail() {
       {(albums.data?.length ?? 0) > 0 && (
         <section className="fz-section">
           <div className="fz-section__head"><h2 className="fz-section__title">Albums</h2></div>
-          <div className="fz-grid">
+          <div className="fz-grid fz-stagger">
             {(albums.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
           </div>
         </section>
@@ -441,7 +441,7 @@ export function LibraryFavourites({ onMenuClick }: { onMenuClick?: () => void })
       {(starred.data?.artist.length ?? 0) > 0 && (
         <section className="fz-section">
           <div className="fz-section__head"><h2 className="fz-section__title">Artists</h2></div>
-          <div className="fz-grid fz-grid--tight">
+          <div className="fz-grid fz-grid--tight fz-stagger">
             {(starred.data?.artist ?? []).map((artist) => <ArtistCard key={artist.id} artist={artist} />)}
           </div>
         </section>
@@ -450,7 +450,7 @@ export function LibraryFavourites({ onMenuClick }: { onMenuClick?: () => void })
       {(starred.data?.album.length ?? 0) > 0 && (
         <section className="fz-section">
           <div className="fz-section__head"><h2 className="fz-section__title">Albums</h2></div>
-          <div className="fz-grid">
+          <div className="fz-grid fz-stagger">
             {(starred.data?.album ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
           </div>
         </section>
@@ -545,7 +545,7 @@ export function LibraryPlaylists({ onMenuClick }: { onMenuClick?: () => void }) 
           <div>Build one from any song's ⋯ menu.</div>
         </div>
       ) : (
-        <div className="fz-grid">
+        <div className="fz-grid fz-stagger">
           {playlists.map((playlist) => <PlaylistCard key={playlist.id} playlist={playlist} />)}
         </div>
       )}

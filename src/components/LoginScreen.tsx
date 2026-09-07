@@ -53,9 +53,8 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
         <div className="fz-ambient__scrim" />
       </div>
 
-      <form className="fz-login__panel fz-glass fz-glass--strong fz-glass--liquid" onSubmit={submit}>
-        <div className="fz-glass-refraction" />
-
+      <form className="fz-login__panel fz-pane" onSubmit={submit}>
+  
         <div className="fz-login__brand">
           <img src="/icons/icon.svg" alt="" />
           <div className="fz-login__title">Frequenzy</div>

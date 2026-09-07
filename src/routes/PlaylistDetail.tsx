@@ -79,7 +79,7 @@ export function PlaylistDetail() {
   const name = playlist.data?.name ?? 'Playlist';
 
   return (
-    <Page title={name}>
+    <Page title={name} showTitle={false}>
       <div className="fz-detail-head">
         <Artwork coverArt={playlist.data?.coverArt} name={name} size={600} className="fz-detail-head__art" />
         <div className="fz-detail-head__info">

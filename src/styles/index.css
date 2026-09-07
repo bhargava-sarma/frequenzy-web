@@ -1,3 +1,8 @@
+/*
+ * Import order is the cascade. Tokens and primitives first, then the layouts
+ * that use them, then material and motion last so the surface treatments win
+ * over the structural rules they refine.
+ */
 @import './tokens.css';
 @import './base.css';
 @import './glass.css';
@@ -5,3 +10,5 @@
 @import './components.css';
 @import './player.css';
 @import './mobile.css';
+@import './material.css';
+@import './motion.css';

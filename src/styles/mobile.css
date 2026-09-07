@@ -708,3 +708,74 @@
   height: var(--tap);
   color: rgba(255, 255, 255, 0.7);
 }
+
+/* Travelling highlight behind the active tab. */
+.fz-tabbar {
+  position: relative;
+}
+
+.fz-tabbar__pill {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: calc(var(--tabbar-height) - 8px);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  transition:
+    transform 460ms var(--ease-emphasis),
+    width 460ms var(--ease-emphasis);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fz-tab {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * Compact detail headers.
+ *
+ * A 280px cover plus generous gaps pushed the track list entirely below the
+ * fold; you opened an album and could not see a single song.
+ */
+.fz-app--compact .fz-detail-head {
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.fz-app--compact .fz-detail-head__art {
+  width: min(210px, 52vw);
+}
+
+.fz-app--compact .fz-detail-head__meta {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.fz-app--compact .fz-detail-head__actions {
+  margin-top: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.fz-app--compact .fz-detail-head__title {
+  font-size: 22px;
+}
+
+.fz-app--compact .fz-detail-head__artist {
+  font-size: 16px;
+}
+
+/* Display type is sized for a laptop; a phone needs it a step down. */
+.fz-app--compact .fz-section__title {
+  font-size: 19px;
+}
+
+.fz-app--compact .fz-page__title {
+  font-size: 26px;
+}
+
+.fz-app--compact .fz-page__subtitle {
+  font-size: 12.5px;
+}

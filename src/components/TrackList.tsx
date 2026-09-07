@@ -145,7 +145,10 @@ export function TrackList({
 
   return (
     <>
-      <div className="fz-tracks" ref={(el) => (reorder.containerRef.current = el)}>
+      <div
+        className={`fz-tracks fz-stagger-fast ${variant === 'numbered' && !showAlbum ? 'fz-tracks--measure' : ''}`}
+        ref={(el) => (reorder.containerRef.current = el)}
+      >
         {songs.map((song, index) => {
           const isCurrent = current?.id === song.id;
           const starred = isStarred('song', song.id);
@@ -191,7 +194,11 @@ export function TrackList({
           );
 
           if (!touch) {
-            return <div key={`${song.id}-${index}`}>{row}</div>;
+            return (
+              <div key={`${song.id}-${index}`} style={{ ['--i' as string]: Math.min(index, 12) }}>
+                {row}
+              </div>
+            );
           }
 
           const leftActions: SwipeAction[] = [
@@ -240,6 +247,7 @@ export function TrackList({
           return (
             <SwipeableRow
               key={`${song.id}-${index}`}
+              style={{ ['--i' as string]: Math.min(index, 12) }}
               leftActions={leftActions}
               rightActions={rightActions}
               open={openSwipe?.index === index ? openSwipe.side : null}
@@ -365,7 +373,7 @@ function TrackRow(props: TrackRowProps) {
           <span className="fz-track__title fz-truncate">{song.title}</span>
           <span className="fz-track__sub fz-truncate">
             {songArtist(song)}
-            {compact && song.album ? ` — ${song.album}` : ''}
+            {compact && showAlbum && song.album ? ` — ${song.album}` : ''}
             {badge?.lossless && !compact && (
               <span
                 className={`fz-badge ${badge.hiRes ? 'fz-badge--hires' : 'fz-badge--lossless'}`}
@@ -452,7 +460,7 @@ function SelectionBar({
   const allStarred = songs.every((song) => isStarred('song', song.id));
 
   return (
-    <div className="fz-selection-bar fz-glass fz-glass--strong">
+    <div className="fz-selection-bar fz-pane">
       <div className="fz-selection-bar__count">
         {songs.length} selected
       </div>

@@ -176,7 +176,7 @@ export function Search({ onMenuClick }: { onMenuClick?: () => void }) {
       )}
 
       {results.loading && (
-        <div className="fz-grid">
+        <div className="fz-grid fz-stagger">
           {Array.from({ length: 10 }, (_, i) => <CardSkeleton key={i} />)}
         </div>
       )}
@@ -192,7 +192,7 @@ export function Search({ onMenuClick }: { onMenuClick?: () => void }) {
       {results.data && (tab === 'all' || tab === 'artists') && results.data.artist.length > 0 && (
         <section className="fz-section">
           <div className="fz-section__head"><h2 className="fz-section__title">Artists</h2></div>
-          <div className="fz-grid fz-grid--tight">
+          <div className="fz-grid fz-grid--tight fz-stagger">
             {results.data.artist.slice(0, tab === 'all' ? 8 : undefined).map((artist) => (
               <ArtistCard key={artist.id} artist={artist} />
             ))}
@@ -203,7 +203,7 @@ export function Search({ onMenuClick }: { onMenuClick?: () => void }) {
       {results.data && (tab === 'all' || tab === 'albums') && results.data.album.length > 0 && (
         <section className="fz-section">
           <div className="fz-section__head"><h2 className="fz-section__title">Albums</h2></div>
-          <div className="fz-grid">
+          <div className="fz-grid fz-stagger">
             {results.data.album.slice(0, tab === 'all' ? 10 : undefined).map((album) => (
               <AlbumCard key={album.id} album={album} />
             ))}

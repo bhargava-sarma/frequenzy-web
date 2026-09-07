@@ -7,7 +7,7 @@
  * shortcut iOS teaches everywhere.
  */
 
-import { type ReactNode } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 
 import { useSwipeActions } from '../hooks/useGestures';
 
@@ -33,6 +33,7 @@ interface SwipeableRowProps {
   onOpenChange: (open: 'left' | 'right' | null) => void;
   disabled?: boolean;
   className?: string;
+  style?: CSSProperties;
 }
 
 export function SwipeableRow({
@@ -43,6 +44,7 @@ export function SwipeableRow({
   onOpenChange,
   disabled,
   className = '',
+  style,
 }: SwipeableRowProps) {
   const leftWidth = leftActions.length * ACTION_WIDTH;
   const rightWidth = rightActions.length * ACTION_WIDTH;
@@ -88,7 +90,7 @@ export function SwipeableRow({
   );
 
   return (
-    <div className={`fz-swipe ${className}`}>
+    <div className={`fz-swipe ${className}`} style={style}>
       {leftActions.length > 0 && renderActions(leftActions, 'left')}
       {rightActions.length > 0 && renderActions(rightActions, 'right')}
 

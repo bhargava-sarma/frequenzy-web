@@ -74,7 +74,7 @@ export function Radio({ onMenuClick }: { onMenuClick?: () => void }) {
 
   return (
     <Page title="Stations" subtitle="Endless shuffles built from your own library." onMenuClick={onMenuClick}>
-      <div className="fz-grid">
+      <div className="fz-grid fz-stagger">
         {stations.map((station) => (
           <button
             key={station.id}

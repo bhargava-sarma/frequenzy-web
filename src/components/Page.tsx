@@ -23,9 +23,16 @@ interface PageProps {
   onMenuClick?: () => void;
   /** Enables pull-to-refresh on touch devices. */
   onRefresh?: () => void | Promise<void>;
+  /**
+   * Detail pages carry the title inside their own header block, so repeating it
+   * as a page title just costs a screenful. The sticky bar still shows it.
+   */
+  showTitle?: boolean;
 }
 
-export function Page({ title, subtitle, hero, actions, children, onMenuClick, onRefresh }: PageProps) {
+export function Page({
+  title, subtitle, hero, actions, children, onMenuClick, onRefresh, showTitle = true,
+}: PageProps) {
   const navigate = useNavigate();
   const touch = useIsTouch();
   const [stuck, setStuck] = useState(false);
@@ -81,12 +88,13 @@ export function Page({ title, subtitle, hero, actions, children, onMenuClick, on
         style={pull.pull > 0 ? { transform: `translateY(${pull.pull}px)` } : undefined}
         {...(onRefresh && touch ? pull.handlers : {})}
       >
-        {hero ?? (
-          <header className="fz-page__header">
-            <h1 className="fz-page__title">{title}</h1>
-            {subtitle && <p className="fz-page__subtitle">{subtitle}</p>}
-          </header>
-        )}
+        {hero ??
+          (showTitle ? (
+            <header className="fz-page__header">
+              <h1 className="fz-page__title">{title}</h1>
+              {subtitle && <p className="fz-page__subtitle">{subtitle}</p>}
+            </header>
+          ) : null)}
         {children}
       </div>
     </div>

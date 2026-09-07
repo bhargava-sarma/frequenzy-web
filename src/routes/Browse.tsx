@@ -61,7 +61,7 @@ export function Browse({ onMenuClick }: { onMenuClick?: () => void }) {
           ))}
         </div>
         {decade !== null && (
-          <div className="fz-grid" style={{ marginTop: 18 }}>
+          <div className="fz-grid fz-stagger" style={{ marginTop: 18 }}>
             {byDecade.loading
               ? Array.from({ length: 10 }, (_, i) => <CardSkeleton key={i} />)
               : (byDecade.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}

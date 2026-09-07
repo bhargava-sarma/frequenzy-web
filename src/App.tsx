@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
+import { AmbientBackdrop } from './components/AmbientBackdrop';
 import { FullPlayer, type PlayerPanel } from './components/FullPlayer';
 import { LoginScreen } from './components/LoginScreen';
 import { NowPlayingBar } from './components/NowPlayingBar';
@@ -34,6 +35,7 @@ import { PlaylistDetail } from './routes/PlaylistDetail';
 import { Radio } from './routes/Radio';
 import { Search } from './routes/Search';
 import { Settings } from './routes/Settings';
+import { AmbientProvider } from './state/ambient';
 import { DialogsProvider } from './state/dialogs';
 import { LibraryProvider } from './state/library';
 import { PlayerProvider, usePlayer } from './state/player';
@@ -51,11 +53,14 @@ export function App() {
 
   return (
     <PlayerProvider>
-      <LibraryProvider enabled={signedIn}>
-        <DialogsProvider>
-          <Shell onSignedOut={() => setSignedIn(false)} />
-        </DialogsProvider>
-      </LibraryProvider>
+      <AmbientProvider>
+        <LibraryProvider enabled={signedIn}>
+          <DialogsProvider>
+            <AmbientBackdrop />
+            <Shell onSignedOut={() => setSignedIn(false)} />
+          </DialogsProvider>
+        </LibraryProvider>
+      </AmbientProvider>
     </PlayerProvider>
   );
 }

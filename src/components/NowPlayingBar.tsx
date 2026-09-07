@@ -76,8 +76,10 @@ export function NowPlayingBar({ onExpand, panel, onPanelChange }: NowPlayingBarP
       >
         {current ? (
           <>
-            <Artwork coverArt={current.coverArt} name={current.title} size={120} className="fz-lcd__art" />
-            <div className="fz-lcd__text">
+            <div key={current.id} className="fz-lcd__art-wrap fz-swap-art">
+              <Artwork coverArt={current.coverArt} name={current.title} size={120} className="fz-lcd__art" />
+            </div>
+            <div key={`${current.id}-text`} className="fz-lcd__text fz-swap-text">
               <span className="fz-lcd__title fz-truncate">
                 {loading && <span className="fz-spinner" style={{ width: 10, height: 10, display: 'inline-block', marginRight: 6, verticalAlign: -1 }} />}
                 {current.title}

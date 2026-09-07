@@ -20,11 +20,16 @@ export interface Palette {
   isLight: boolean;
 }
 
+/**
+ * The neutral palette used before any artwork has been read. Not grey — a cool
+ * blue and a warm violet, so an idle app still has depth rather than reading as
+ * flat black.
+ */
 export const DEFAULT_PALETTE: Palette = {
-  primary: '#5a5a66',
-  secondary: '#3a3a44',
-  tertiary: '#6b6b78',
-  background: '#121214',
+  primary: '#3f4a6b',
+  secondary: '#4a3560',
+  tertiary: '#2f4257',
+  background: '#0d0d10',
   foreground: '#ffffff',
   isLight: false,
 };

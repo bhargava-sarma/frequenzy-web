@@ -77,7 +77,7 @@ export function AlbumDetail() {
   const data = album.data;
 
   return (
-    <Page title={data.name}>
+    <Page title={data.name} showTitle={false}>
       <div className="fz-detail-head">
         <Artwork coverArt={data.coverArt} name={data.name} size={600} className="fz-detail-head__art" />
         <div className="fz-detail-head__info">

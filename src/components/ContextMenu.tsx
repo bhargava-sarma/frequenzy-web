@@ -80,11 +80,10 @@ export function ContextMenu({ x, y, entries, onClose }: ContextMenuProps) {
   return createPortal(
     <div
       ref={ref}
-      className="fz-menu fz-glass fz-glass--strong fz-glass--liquid"
+      className="fz-menu fz-pane"
       style={{ left: pos.left, top: pos.top, ['--origin' as string]: pos.origin }}
       role="menu"
     >
-      <div className="fz-glass-refraction" />
       {entries.map((entry) => {
         if ('separator' in entry) return <div key={entry.id} className="fz-menu__sep" />;
         if ('heading' in entry) return <div key={entry.id} className="fz-menu__label">{entry.label}</div>;

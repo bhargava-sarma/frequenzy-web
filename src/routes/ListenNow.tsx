@@ -8,7 +8,7 @@ import { Page } from '../components/Page';
 import { Artwork } from '../components/Artwork';
 import { PlayIcon, ShuffleIcon, SparkleIcon } from '../components/Icons';
 import { albumArtist } from '../lib/format';
-import { getAlbumList, getRandomSongs, getStarred } from '../lib/subsonic';
+import { getAlbum, getAlbumList, getRandomSongs, getStarred } from '../lib/subsonic';
 import { useAsync, type AsyncState } from '../hooks/useAsync';
 import { useGlassPointer } from '../hooks/useGlassPointer';
 import type { Album } from '../lib/types';
@@ -38,6 +38,13 @@ export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
     return pool?.[0];
   }, [newest.data, recent.data]);
 
+  const playSpotlight = async () => {
+    if (!spotlight) return;
+    const full = await getAlbum(spotlight.id).catch(() => null);
+    const songs = full?.song ?? [];
+    if (songs.length) actions.playQueue(songs, 0, { kind: 'Album', name: spotlight.name, id: spotlight.id });
+  };
+
   const shuffleEverything = async () => {
     const songs = await getRandomSongs({ size: 200 });
     if (songs.length) actions.playQueue(songs, 0, { kind: 'Station', name: 'Your Library' });
@@ -62,15 +69,7 @@ export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
             ref={glass.ref}
             onPointerMove={glass.onPointerMove}
             onPointerLeave={glass.onPointerLeave}
-            className="fz-glass fz-glass--liquid fz-glass--interactive fz-glass--tracked"
-            style={{
-              display: 'flex',
-              gap: 22,
-              padding: 20,
-              borderRadius: 'var(--radius-xl)',
-              alignItems: 'center',
-              cursor: 'pointer',
-            }}
+            className="fz-hero fz-pane fz-pane--interactive fz-pane--lit"
             role="button"
             tabIndex={0}
             onClick={() => navigate(`/album/${encodeURIComponent(spotlight.id)}`)}
@@ -78,31 +77,33 @@ export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
               if (event.key === 'Enter') navigate(`/album/${encodeURIComponent(spotlight.id)}`);
             }}
           >
-            <div className="fz-glass-refraction" />
-            <Artwork
-              coverArt={spotlight.coverArt}
-              name={spotlight.name}
-              size={400}
-              className=""
-            />
-            <div style={{ minWidth: 0, position: 'relative', zIndex: 3, flex: 1 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>
-                Pick up where you left off
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, letterSpacing: '-0.6px', marginTop: 4 }} className="fz-truncate">
-                {spotlight.name}
-              </div>
-              <div style={{ fontSize: 15, color: 'var(--text-secondary)' }} className="fz-truncate">
-                {albumArtist(spotlight)}
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                <button type="button" className="fz-btn fz-btn--solid" onClick={(event) => { event.stopPropagation(); navigate(`/album/${encodeURIComponent(spotlight.id)}`); }}>
-                  <PlayIcon /> Open
+            <Artwork coverArt={spotlight.coverArt} name={spotlight.name} size={400} className="fz-hero__art" />
+            <div className="fz-hero__text">
+              <div className="fz-hero__eyebrow">Pick up where you left off</div>
+              <div className="fz-hero__title fz-truncate">{spotlight.name}</div>
+              <div className="fz-hero__artist fz-truncate">{albumArtist(spotlight)}</div>
+            </div>
+            <div className="fz-hero__actions">
+                <button
+                  type="button"
+                  className="fz-btn fz-btn--solid"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void playSpotlight();
+                  }}
+                >
+                  <PlayIcon /> Play
                 </button>
-                <button type="button" className="fz-btn" onClick={(event) => { event.stopPropagation(); void shuffleEverything(); }}>
+                <button
+                  type="button"
+                  className="fz-btn"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void shuffleEverything();
+                  }}
+                >
                   <ShuffleIcon /> Shuffle Library
                 </button>
-              </div>
             </div>
           </div>
         </section>

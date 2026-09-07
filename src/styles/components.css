@@ -1009,9 +1009,14 @@
   animation: fz-selection-in 320ms var(--ease-spring);
 }
 
+/*
+ * Centring is done with the `translate` property, and `transform` composes on
+ * top of it — so these keyframes must not repeat the -50% or the bar ends up
+ * shifted a full width to the left.
+ */
 @keyframes fz-selection-in {
-  from { opacity: 0; transform: translate(-50%, 14px) scale(0.96); }
-  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: none; }
 }
 
 .fz-selection-bar__count {
@@ -1229,4 +1234,182 @@
   .fz-toolbar-sortlabel {
     display: none;
   }
+}
+
+/* ------------------------------------------------------------------- hero */
+
+/*
+ * The "pick up where you left off" card. Wide and shallow: a big square of
+ * artwork with a column of black beside it was the loudest thing on the page
+ * and said the least.
+ */
+.fz-hero {
+  display: grid;
+  grid-template-areas: 'art text actions';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+}
+
+.fz-hero__art { grid-area: art; }
+.fz-hero__text { grid-area: text; }
+.fz-hero__actions { grid-area: actions; }
+
+.fz-hero__art {
+  /* Fixed square, and allowed to shrink — an unconstrained aspect-ratio box
+     used to overflow the card entirely on a phone. */
+  width: clamp(96px, 22vw, 150px);
+  height: clamp(96px, 22vw, 150px);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elev-3);
+  flex: none;
+}
+
+.fz-hero__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fz-hero__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.fz-hero__title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1.14;
+  margin-top: 3px;
+}
+
+.fz-hero__artist {
+  font-size: clamp(13px, 1.4vw, 15px);
+  color: var(--text-secondary);
+}
+
+.fz-hero__actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/*
+ * Narrow: the buttons drop to their own full-width row under the artwork and
+ * title rather than wrapping mid-flow and stranding one of them.
+ */
+@media (max-width: 720px) {
+  .fz-hero {
+    grid-template-areas:
+      'art text'
+      'actions actions';
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .fz-hero__actions {
+    margin-top: 2px;
+  }
+
+  .fz-hero__actions .fz-btn {
+    flex: 1;
+    height: 38px;
+    padding: 0 12px;
+  }
+}
+
+/* A numbered album listing reads better at a fixed measure than stretched
+   across a wide window with its durations marooned on the far edge. */
+.fz-tracks--measure {
+  max-width: 860px;
+}
+
+/* Rows lift very slightly on hover instead of only tinting. */
+.fz-track {
+  transition:
+    background-color 180ms var(--ease-out),
+    box-shadow 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+
+.fz-track:hover {
+  box-shadow: var(--elev-1);
+}
+
+/* Shelves fade at whichever edge still has content beyond it. */
+.fz-shelf-scroll {
+  --fade: 42px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade),
+    #000 calc(100% - var(--fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade),
+    #000 calc(100% - var(--fade)),
+    transparent 100%
+  );
+  transition: -webkit-mask-image 240ms linear, mask-image 240ms linear;
+}
+
+.fz-shelf-scroll.is-at-start {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--fade)), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--fade)), transparent 100%);
+}
+
+.fz-shelf-scroll.is-at-end {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 100%);
+}
+
+.fz-shelf-scroll.is-at-start.is-at-end {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* Artwork lifts with a spring and blooms its shadow. */
+.fz-card__art {
+  transition:
+    transform 420ms var(--ease-emphasis),
+    box-shadow 420ms var(--ease-out);
+}
+
+.fz-card:hover .fz-card__art {
+  transform: translateY(-6px) scale(1.018);
+  box-shadow: var(--elev-4);
+}
+
+.fz-card:active .fz-card__art {
+  transform: translateY(-2px) scale(0.998);
+  transition-duration: 120ms;
+}
+
+/* The play badge scales up out of the artwork rather than just fading. */
+.fz-play-overlay {
+  transition:
+    opacity 260ms var(--ease-out),
+    transform 380ms var(--ease-emphasis),
+    background-color 180ms var(--ease-out);
+}
+
+.fz-card:hover .fz-play-overlay {
+  transform: translateY(-6px) scale(1);
+}
+
+.fz-play-overlay:hover {
+  transform: translateY(-6px) scale(1.1);
 }

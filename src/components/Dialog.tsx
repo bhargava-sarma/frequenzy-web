@@ -29,9 +29,8 @@ export function Dialog({ title, onClose, children, actions }: DialogProps) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="fz-dialog fz-glass fz-glass--strong fz-glass--liquid" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="fz-glass-refraction" />
-        <div className="fz-dialog__title">{title}</div>
+      <div className="fz-dialog fz-pane" role="dialog" aria-modal="true" aria-label={title}>
+          <div className="fz-dialog__title">{title}</div>
         <div className="fz-dialog__body">
           {children}
           {actions && <div className="fz-dialog__actions">{actions}</div>}

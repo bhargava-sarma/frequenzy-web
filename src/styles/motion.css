@@ -1,0 +1,444 @@
+/*
+ * Motion.
+ *
+ * Two rules hold everything together: things that enter rise a little as they
+ * fade, and things that leave just fade. Durations are short enough to feel
+ * instant on a click and long enough to be legible on a page change.
+ */
+
+:root {
+  --dur-micro: 110ms;
+  --dur-enter: 380ms;
+  --dur-exit: 200ms;
+  --stagger: 34ms;
+  /* Overshoots slightly — the curve behind every "pop" in the interface. */
+  --ease-emphasis: cubic-bezier(0.2, 0.9, 0.25, 1.08);
+}
+
+/* --------------------------------------------------------------- entrances */
+
+@keyframes fz-rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fz-rise-sm {
+  from { opacity: 0; transform: translate3d(0, 7px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fz-scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fz-slide-left {
+  from { opacity: 0; transform: translate3d(16px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fz-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/*
+ * Staggered lists. Children animate in sequence via an index custom property,
+ * capped so a 500-album grid does not take twenty seconds to appear.
+ */
+.fz-stagger > * {
+  animation: fz-rise var(--dur-enter) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
+}
+
+.fz-stagger-fast > * {
+  animation: fz-rise-sm 300ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 18ms);
+}
+
+/* --------------------------------------------------------- page transitions */
+
+.fz-page-enter {
+  animation: fz-page-in 420ms var(--ease-out);
+}
+
+@keyframes fz-page-in {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Headers lead the content in by a beat. */
+.fz-page__header {
+  animation: fz-rise 460ms var(--ease-out) backwards;
+}
+
+.fz-section {
+  animation: fz-rise 480ms var(--ease-out) backwards;
+  animation-delay: 60ms;
+}
+
+/* ------------------------------------------------------- track change cross-fade */
+
+/*
+ * When the track changes, the bar's artwork dissolves rather than snapping, and
+ * the text slides up as if the new title pushed the old one out.
+ */
+@keyframes fz-art-swap {
+  from { opacity: 0; transform: scale(1.06); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes fz-text-swap {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+.fz-swap-art {
+  animation: fz-art-swap 520ms var(--ease-out);
+}
+
+.fz-swap-text {
+  animation: fz-text-swap 380ms var(--ease-out);
+}
+
+/* ------------------------------------------------------------ press feedback */
+
+/*
+ * Every control shares one press response, so the whole interface feels like it
+ * is made of the same stuff.
+ */
+.fz-btn,
+.fz-icon-btn,
+.fz-chip,
+.fz-transport__btn,
+.fz-tab,
+.fz-mini__btn,
+.fz-card {
+  transition:
+    transform var(--dur-micro) var(--ease-out),
+    background-color 180ms var(--ease-out),
+    color 180ms var(--ease-out),
+    box-shadow 240ms var(--ease-out),
+    opacity 180ms var(--ease-out);
+}
+
+.fz-btn:active,
+.fz-chip:active {
+  transform: scale(0.955);
+}
+
+/* A specular sweep across solid buttons on hover. */
+.fz-btn--solid {
+  position: relative;
+  overflow: hidden;
+}
+
+.fz-btn--solid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.34) 46%,
+    transparent 68%
+  );
+  transform: translateX(-130%);
+  transition: transform 720ms var(--ease-out);
+  pointer-events: none;
+}
+
+.fz-btn--solid:hover::after {
+  transform: translateX(130%);
+}
+
+/* ------------------------------------------------------------- icon morphing */
+
+/* Play and pause swap with a quick scale rather than a hard cut. */
+@keyframes fz-icon-pop {
+  0% { transform: scale(0.7); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.fz-transport__btn--play svg,
+.fz-mini__btn svg {
+  animation: fz-icon-pop 260ms var(--ease-emphasis);
+}
+
+/* --------------------------------------------------------------- shimmer */
+
+@keyframes fz-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Artwork settles in rather than popping. */
+.fz-art img {
+  transition: opacity 620ms var(--ease-out), transform 620ms var(--ease-out);
+  transform: scale(1.03);
+}
+
+.fz-art img.is-loaded {
+  transform: none;
+}
+
+/* --------------------------------------------------------------- reduce motion */
+
+:root[data-motion='reduced'] .fz-stagger > *,
+:root[data-motion='reduced'] .fz-stagger-fast > *,
+:root[data-motion='reduced'] .fz-section,
+:root[data-motion='reduced'] .fz-page__header,
+:root[data-motion='reduced'] .fz-page-enter {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fz-stagger > *,
+  .fz-stagger-fast > *,
+  .fz-section,
+  .fz-page__header,
+  .fz-page-enter {
+    animation: none !important;
+  }
+}
+
+/*
+ * Stagger indices.
+ *
+ * Setting --i from JS would mean threading an index through every list that
+ * exists; nth-child covers the first two rows of any grid or shelf, which is
+ * all the eye tracks anyway. Anything later simply arrives with the last delay.
+ */
+.fz-stagger > *,
+.fz-stagger-fast > * {
+  --i: 12;
+}
+
+.fz-stagger > *:nth-child(1),  .fz-stagger-fast > *:nth-child(1)  { --i: 0; }
+.fz-stagger > *:nth-child(2),  .fz-stagger-fast > *:nth-child(2)  { --i: 1; }
+.fz-stagger > *:nth-child(3),  .fz-stagger-fast > *:nth-child(3)  { --i: 2; }
+.fz-stagger > *:nth-child(4),  .fz-stagger-fast > *:nth-child(4)  { --i: 3; }
+.fz-stagger > *:nth-child(5),  .fz-stagger-fast > *:nth-child(5)  { --i: 4; }
+.fz-stagger > *:nth-child(6),  .fz-stagger-fast > *:nth-child(6)  { --i: 5; }
+.fz-stagger > *:nth-child(7),  .fz-stagger-fast > *:nth-child(7)  { --i: 6; }
+.fz-stagger > *:nth-child(8),  .fz-stagger-fast > *:nth-child(8)  { --i: 7; }
+.fz-stagger > *:nth-child(9),  .fz-stagger-fast > *:nth-child(9)  { --i: 8; }
+.fz-stagger > *:nth-child(10), .fz-stagger-fast > *:nth-child(10) { --i: 9; }
+.fz-stagger > *:nth-child(11), .fz-stagger-fast > *:nth-child(11) { --i: 10; }
+.fz-stagger > *:nth-child(12), .fz-stagger-fast > *:nth-child(12) { --i: 11; }
+
+/* ------------------------------------------------------------------ scrubber */
+
+/*
+ * The scrubber is the control people touch most, so it gets the most attention:
+ * the track thickens under the pointer, the fill picks up the accent, and the
+ * knob springs out rather than appearing.
+ */
+.fz-scrub {
+  padding: 6px 0;
+  margin: -6px 0;
+}
+
+.fz-scrub__track {
+  transition:
+    height 220ms var(--ease-emphasis),
+    background-color 220ms var(--ease-out);
+}
+
+.fz-scrub__fill {
+  transition: background-color 220ms var(--ease-out);
+}
+
+.fz-scrub:hover .fz-scrub__fill,
+.fz-scrub.is-dragging .fz-scrub__fill {
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.fz-scrub__knob {
+  transition:
+    transform 320ms var(--ease-emphasis),
+    box-shadow 220ms var(--ease-out);
+}
+
+.fz-scrub.is-dragging .fz-scrub__knob {
+  transform: translate(-50%, -50%) scale(1.28);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(255, 255, 255, 0.12);
+}
+
+/* --------------------------------------------------------------- surfaces */
+
+/* Menus, sheets and dialogs share the pane material and a spring entrance. */
+.fz-menu {
+  animation: fz-menu-in 220ms var(--ease-emphasis);
+}
+
+@keyframes fz-menu-in {
+  from { opacity: 0; transform: scale(0.93) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.fz-dialog {
+  animation: fz-dialog-in 420ms var(--ease-emphasis);
+}
+
+@keyframes fz-dialog-in {
+  from { opacity: 0; transform: scale(0.9) translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --------------------------------------------------------- sidebar indicator */
+
+/*
+ * The active marker grows out of the rail rather than blinking on, and nav rows
+ * shift a hair on hover so the sidebar feels responsive to the pointer.
+ */
+.fz-nav-item,
+.fz-playlist-item {
+  transition:
+    background-color 180ms var(--ease-out),
+    transform 220ms var(--ease-out),
+    color 180ms var(--ease-out);
+}
+
+.fz-nav-item:hover,
+.fz-playlist-item:hover {
+  transform: translateX(2px);
+}
+
+.fz-nav-item.is-active::before {
+  animation: fz-marker-in 420ms var(--ease-emphasis);
+}
+
+@keyframes fz-marker-in {
+  from { transform: translateY(-50%) scaleY(0.15); opacity: 0; }
+  to { transform: translateY(-50%) scaleY(1); opacity: 1; }
+}
+
+/* ------------------------------------------------------------------ lyrics */
+
+/* The active line settles rather than snapping between weights. */
+.fz-lyric {
+  transition:
+    color 520ms var(--ease-out),
+    transform 520ms var(--ease-emphasis),
+    filter 520ms var(--ease-out),
+    opacity 520ms var(--ease-out);
+}
+
+.fz-lyric.is-active {
+  transform: scale(1.025);
+}
+
+/* --------------------------------------------------------------- skeletons */
+
+/* Skeletons dissolve into their content instead of being swapped out. */
+.fz-skeleton {
+  animation: fz-fade 240ms var(--ease-out);
+}
+
+/* ------------------------------------------------------------ empty states */
+
+.fz-empty {
+  animation: fz-scale-in 460ms var(--ease-out);
+}
+
+.fz-empty svg {
+  animation: fz-pulse-soft 3.6s var(--ease-in-out) infinite;
+}
+
+/* ------------------------------------------------------------- search field */
+
+.fz-input {
+  transition:
+    background-color 200ms var(--ease-out),
+    border-color 200ms var(--ease-out),
+    box-shadow 240ms var(--ease-out);
+}
+
+.fz-input:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ------------------------------------------------------ full player artwork */
+
+/*
+ * The cover lifts on play and drops back on pause, with the glow tracking it —
+ * the single clearest signal of playback state on the whole screen.
+ */
+.fz-player__art {
+  transition:
+    transform 720ms var(--ease-emphasis),
+    box-shadow 720ms var(--ease-out);
+}
+
+.fz-player__art.is-playing {
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.7),
+    0 0 120px -30px var(--art-primary);
+}
+
+/* ------------------------------------------------------- playing artwork */
+
+/*
+ * A very slow float while music plays. Barely perceptible frame to frame, but
+ * it keeps the full-screen player from feeling like a static poster.
+ */
+@keyframes fz-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -6px, 0) scale(1.006); }
+}
+
+.fz-player__art.is-playing {
+  animation: fz-float 7s var(--ease-in-out) infinite;
+}
+
+/* The equaliser bars ease rather than ping between heights. */
+.fz-eq span {
+  animation-timing-function: var(--ease-in-out);
+}
+
+/* Shelf arrows fade in with the section rather than always sitting there. */
+.fz-section__head .fz-icon-btn {
+  opacity: 0;
+  transition: opacity 220ms var(--ease-out), background-color 180ms var(--ease-out);
+}
+
+.fz-section:hover .fz-section__head .fz-icon-btn,
+.fz-section__head .fz-icon-btn:focus-visible {
+  opacity: 1;
+}
+
+.fz-section__head .fz-icon-btn:disabled {
+  opacity: 0 !important;
+}
+
+/* Touch has no hover, so the arrows would never appear. */
+@media (hover: none) {
+  .fz-section__head .fz-icon-btn {
+    opacity: 1;
+  }
+}
+
+/* Heart fills with a small pop when favourited. */
+@keyframes fz-heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+
+.fz-icon-btn.is-on svg,
+.fz-track__star.is-on svg {
+  animation: fz-heart-pop 340ms var(--ease-emphasis);
+}
+
+:root[data-motion='reduced'] .fz-player__art.is-playing {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fz-player__art.is-playing {
+    animation: none;
+  }
+}

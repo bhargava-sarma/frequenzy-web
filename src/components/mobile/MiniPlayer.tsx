@@ -86,14 +86,15 @@ export function MiniPlayer({ onExpand }: { onExpand: () => void }) {
     >
       <div className="fz-mini__progress" style={{ width: `${progress}%` }} />
 
-      <Artwork
-        coverArt={current.coverArt}
-        name={current.title}
-        size={120}
-        className="fz-mini__art"
-      />
+      <div key={current.id} className="fz-swap-art">
+        <Artwork coverArt={current.coverArt} name={current.title} size={120} className="fz-mini__art" />
+      </div>
 
-      <div className="fz-mini__text" style={{ transform: `translateX(${nudge}px)` }}>
+      <div
+        key={`${current.id}-text`}
+        className="fz-mini__text fz-swap-text"
+        style={{ transform: `translateX(${nudge}px)` }}
+      >
         <span className="fz-mini__title fz-truncate">{current.title}</span>
         <span className="fz-mini__sub fz-truncate">{songArtist(current)}</span>
       </div>
