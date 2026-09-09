@@ -2,14 +2,15 @@
  * "Playing Next" — the live queue.
  *
  * Rows reorder by dragging their grip, which works with a finger as well as a
- * mouse, and swipe away to remove on touch. What has already played stays
- * available above, so you can jump back a couple of tracks.
+ * mouse; on touch a row swipes left to jump the queue or leave it, and right to
+ * play straight away. What has already played stays available above, so you can
+ * jump back a couple of tracks.
  */
 
 import { useState } from 'react';
 
 import { Artwork } from './Artwork';
-import { GripIcon, InfinityIcon, PlayIcon, TrashIcon } from './Icons';
+import { GripIcon, InfinityIcon, PlayIcon, PlayNextIcon, TrashIcon } from './Icons';
 import { SwipeableRow } from './SwipeableRow';
 import { songArtist } from '../lib/format';
 import { useDragReorder } from '../hooks/useGestures';
@@ -20,7 +21,7 @@ import type { Song } from '../lib/types';
 export function QueuePanel() {
   const { queue, index, context, autoplay, extending, actions } = usePlayer();
   const touch = useIsTouch();
-  const [openSwipe, setOpenSwipe] = useState<number | null>(null);
+  const [openSwipe, setOpenSwipe] = useState<{ index: number; side: 'left' | 'right' } | null>(null);
 
   const reorder = useDragReorder({
     onReorder: (from, to) => actions.moveInQueue(index + 1 + from, index + 1 + to),
@@ -133,9 +134,17 @@ export function QueuePanel() {
             return (
               <SwipeableRow
                 key={`${song.id}-${absolute}`}
-                open={openSwipe === absolute ? 'left' : null}
-                onOpenChange={(next) => setOpenSwipe(next ? absolute : null)}
+                open={openSwipe?.index === absolute ? openSwipe.side : null}
+                onOpenChange={(next) => setOpenSwipe(next ? { index: absolute, side: next } : null)}
                 leftActions={[
+                  {
+                    id: 'next',
+                    label: 'Play Next',
+                    tone: 'next',
+                    icon: <PlayNextIcon />,
+                    // Already queued, so "play next" means move rather than add.
+                    onSelect: () => actions.moveInQueue(absolute, index + 1),
+                  },
                   {
                     id: 'remove',
                     label: 'Remove',
@@ -148,7 +157,7 @@ export function QueuePanel() {
                   {
                     id: 'play',
                     label: 'Play Now',
-                    tone: 'next',
+                    tone: 'love',
                     icon: <PlayIcon />,
                     onSelect: () => actions.jumpTo(absolute),
                   },

@@ -52,7 +52,11 @@
   --radius-pill: 999px;
 
   --sidebar-width: 258px;
-  --bar-height: 76px;
+  /* The floating transport capsule, and the air it needs around it. */
+  --bar-pill: 66px;
+  --bar-inset: 16px;
+  /* The grid row the capsule sits in: the pill, its margin, and a little sky. */
+  --bar-height: 88px;
   --topbar-height: 54px;
 
   /* Device safe areas. Zero everywhere except notched phones and PWAs. */
@@ -63,9 +67,13 @@
 
   /* Compact shell metrics. */
   --tabbar-height: 52px;
-  --miniplayer-height: 58px;
+  --miniplayer-height: 62px;
+  /* The gap between the floating mini player and the tab bar under it. */
+  --mini-inset: 8px;
   /* Everything a compact page must clear at the bottom. */
-  --compact-dock: calc(var(--tabbar-height) + var(--miniplayer-height) + var(--safe-bottom));
+  --compact-dock: calc(
+    var(--tabbar-height) + var(--miniplayer-height) + var(--mini-inset) + var(--safe-bottom)
+  );
   /* Apple's minimum comfortable touch target. */
   --tap: 44px;
 

@@ -2,18 +2,33 @@
 
 /* --------------------------------------------------------- now playing bar */
 
+/*
+ * A capsule that floats clear of the window edges, not a slab bolted to the
+ * bottom of it. Detaching it is what lets it read as glass: light from the
+ * ambient backdrop passes around the pill as well as through it, so the shape
+ * is legible even against a dark page.
+ */
 .fz-bar {
   grid-area: player;
+  align-self: end;
+  justify-self: center;
+  width: min(1120px, calc(100% - 2 * var(--bar-inset)));
+  height: var(--bar-pill);
+  margin-bottom: var(--bar-inset);
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(320px, 620px) minmax(180px, 1fr);
+  grid-template-columns: minmax(190px, 1fr) minmax(280px, 430px) minmax(190px, 1fr);
   align-items: center;
-  gap: 16px;
-  padding: 0 18px;
-  border-top: 1px solid var(--separator);
-  background: var(--glass-tint-strong);
-  backdrop-filter: blur(56px) saturate(190%);
-  -webkit-backdrop-filter: blur(56px) saturate(190%);
+  gap: 12px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
   z-index: 40;
+  /*
+   * Deliberately NOT `isolation: isolate`. Isolation makes an element its own
+   * backdrop root, and an element that is its own backdrop root has nothing
+   * behind it to filter — the blur silently samples an empty canvas and the
+   * glass turns into flat plastic. `position` + `z-index` already scope the rim
+   * pseudo-element, which is all the isolation was ever for.
+   */
   position: relative;
 }
 
@@ -21,24 +36,42 @@
 .fz-bar__right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fz-bar__left {
+  padding-left: 6px;
+  gap: 6px;
 }
 
 .fz-bar__right {
   justify-content: flex-end;
+  padding-right: 4px;
+}
+
+/* Groups inside the pill breathe apart instead of running into one strip. */
+.fz-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fz-bar__group + .fz-bar__group {
+  margin-left: 8px;
 }
 
 .fz-transport {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .fz-transport__btn {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   color: var(--text-primary);
   transition: transform var(--dur-fast) var(--ease-spring), color var(--dur-fast) var(--ease-out),
@@ -46,8 +79,8 @@
 }
 
 .fz-transport__btn svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
 }
 
 .fz-transport__btn:hover {
@@ -59,8 +92,8 @@
 }
 
 .fz-transport__btn--play svg {
-  width: 25px;
-  height: 25px;
+  width: 26px;
+  height: 26px;
 }
 
 .fz-transport__btn:disabled {
@@ -69,18 +102,43 @@
 }
 
 /* The centered "LCD" panel — the piece that most defines the Apple Music look. */
+/*
+ * Two rows: the display itself, and a lane along the bottom that belongs to the
+ * scrubber. The scrubber used to be absolutely positioned over the panel, where
+ * it ran straight through the artist line on hover. Giving it a row of its own
+ * means nothing has to move when it appears.
+ *
+ * The left padding clears the capsule's own curve — at the artwork's height the
+ * corner has already eaten about 10px, and a cover clipped by the bend looks
+ * like a bug rather than a bevel.
+ */
 .fz-lcd {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: 40px 1fr auto;
+  grid-template-rows: 1fr 10px;
   align-items: center;
-  gap: 11px;
-  height: 52px;
-  padding: 0 11px 0 6px;
-  border-radius: var(--radius-md);
+  column-gap: 12px;
+  height: 50px;
+  padding: 2px 18px 0 12px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   position: relative;
   overflow: hidden;
   transition: background-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+
+.fz-lcd__art-wrap {
+  grid-row: 1 / span 2;
+}
+
+.fz-lcd__text {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.fz-lcd__time {
+  grid-row: 1;
+  grid-column: 3;
 }
 
 .fz-lcd {
@@ -105,8 +163,7 @@
 .fz-lcd__art {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-xs);
-  margin-left: 4px;
+  border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transition: transform var(--dur) var(--ease-spring);
 }
@@ -140,17 +197,15 @@
   font-size: 11px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-  min-width: 34px;
+  min-width: 32px;
   text-align: right;
 }
 
-/* The scrubber lives along the bottom edge of the LCD. */
+/* The scrubber's own lane along the bottom of the LCD. */
 .fz-lcd__scrub {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 4px;
-  height: 12px;
+  grid-row: 2;
+  grid-column: 2 / span 2;
+  height: 10px;
   display: flex;
   align-items: center;
   opacity: 0;
@@ -164,6 +219,7 @@
 
 .fz-lcd__empty {
   grid-column: 1 / -1;
+  grid-row: 1 / -1;
   text-align: center;
   font-size: 12.5px;
   color: var(--text-tertiary);
@@ -486,6 +542,50 @@
   overflow-y: auto;
   scrollbar-width: none;
   padding: 0 8px;
+  /* The travelling highlight is positioned against this box. */
+  position: relative;
+}
+
+/*
+ * One highlight for the whole sheet.
+ *
+ * It is measured onto the active line and slides to the next one, so the
+ * rectangle behind the words is plainly the same object moving rather than a
+ * background blinking off one line and on to another.
+ */
+.fz-lyrics__marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  border-radius: 16px;
+  /*
+   * Smoked rather than frosted. A lighter pane raises the luminance right where
+   * the white text sits, so the sung line ends up with *less* contrast than the
+   * ones around it — exactly backwards. Darkening the backdrop a touch keeps it
+   * reading as glass while letting the words stay the brightest thing on screen.
+   */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 10px 30px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(12px) saturate(170%) brightness(0.88);
+  -webkit-backdrop-filter: blur(12px) saturate(170%) brightness(0.88);
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, height;
+  transition:
+    transform 520ms var(--ease-emphasis),
+    height 520ms var(--ease-emphasis),
+    width 260ms var(--ease-out),
+    opacity 260ms var(--ease-out);
+}
+
+:root[data-glass='off'] .fz-lyrics__marker {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .fz-lyrics__scroll::-webkit-scrollbar {
@@ -495,6 +595,8 @@
 .fz-lyric {
   display: block;
   width: 100%;
+  position: relative;
+  z-index: 1;
   text-align: left;
   font-family: var(--font-display);
   font-size: clamp(22px, 2.5vw, 34px);
@@ -512,9 +614,19 @@
   opacity: 0.85;
 }
 
-.fz-lyric:hover {
-  color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.05);
+/*
+ * Hovering used to paint its own rectangle, which is exactly what made the
+ * highlight look stuck: the pointer sits still while the song moves on. Hover
+ * now only lifts the text.
+ */
+@media (hover: hover) {
+  .fz-lyric:hover {
+    color: rgba(255, 255, 255, 0.62);
+  }
+
+  .fz-lyric.is-active:hover {
+    color: #fff;
+  }
 }
 
 /* The active line snaps forward: full white, slightly larger, perfectly sharp. */
@@ -582,6 +694,44 @@
 @keyframes fz-dot-breathe {
   0%, 100% { transform: scale(0.72); opacity: 0.42; }
   50% { transform: scale(1.14); opacity: 1; }
+}
+
+/* ------------------------------------------------------------ lyrics: empty */
+
+.fz-lyrics--empty {
+  display: grid;
+  place-items: center;
+  padding: 0 24px;
+  /* The fade is there to soften scrolling text; there is none to soften here. */
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.fz-lyrics__empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  max-width: 340px;
+  text-align: center;
+  animation: fz-scale-in 420ms var(--ease-out);
+}
+
+.fz-lyrics__empty-title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: #fff;
+}
+
+.fz-lyrics__empty-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.fz-lyrics__retry {
+  margin-top: 12px;
 }
 
 .fz-lyrics__toolbar {
@@ -756,25 +906,27 @@
   }
 }
 
-@media (max-width: 700px) {
+/*
+ * Between 900px (where the compact shell takes over) and about 1100px the
+ * capsule has to give something up. The time readout and the volume slider go
+ * first: both have keyboard and menu equivalents, and neither is worth
+ * crushing the title into an ellipsis for.
+ */
+@media (max-width: 1100px) {
   .fz-bar {
-    grid-template-columns: 1fr auto;
-    gap: 8px;
-    padding: 0 10px;
-  }
-
-  .fz-bar__left {
-    display: none;
-  }
-
-  .fz-lcd {
-    grid-template-columns: 40px 1fr;
+    grid-template-columns: minmax(150px, 1fr) minmax(250px, 380px) minmax(150px, 1fr);
   }
 
   .fz-lcd__time {
     display: none;
   }
 
+  .fz-volume .fz-scrub {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
   .fz-player__body {
     padding: 0 20px 16px;
     gap: 20px;
@@ -809,10 +961,5 @@
 .fz-lcd__art-wrap {
   width: 40px;
   height: 40px;
-  margin-left: 4px;
   flex: none;
-}
-
-.fz-lcd__art-wrap .fz-lcd__art {
-  margin-left: 0;
 }

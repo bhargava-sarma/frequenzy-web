@@ -2,16 +2,19 @@
  * Time-synced lyrics.
  *
  * The active line is centred and sharpened while its neighbours sit back,
- * blurred and dimmed — the depth-of-field effect Apple Music uses. Non-Latin
- * lyrics get a romanized reading so they can still be sung along to; the
- * original stays visible above it, because the point is transliteration, never
- * translation.
+ * blurred and dimmed — the depth-of-field effect Apple Music uses — with a
+ * single highlight that glides from line to line rather than being redrawn
+ * under each one.
+ *
+ * Non-Latin lyrics get a romanized reading so they can still be sung along to;
+ * the original stays visible above it, because the point is transliteration,
+ * never translation.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { LanguageIcon } from './Icons';
-import { activeLineIndex, fetchLyrics, romanizeLyrics, type Lyrics } from '../lib/lyrics';
+import { HistoryIcon, LanguageIcon } from './Icons';
+import { activeLineIndex, fetchLyrics, forgetLyrics, romanizeLyrics, type Lyrics } from '../lib/lyrics';
 import { preloadRomanizers } from '../lib/romanize';
 import type { Song } from '../lib/types';
 import { usePlayer } from '../state/player';
@@ -21,6 +24,8 @@ import { useSettings } from '../state/settings';
 const MANUAL_SCROLL_GRACE = 4500;
 /** A gap longer than this between lines is treated as an instrumental break. */
 const INTERLUDE_GAP = 6;
+/** Breathing room between the words and the edge of the highlight. */
+const MARKER_PAD = 15;
 
 export function LyricsView({ song }: { song: Song }) {
   const { currentTime, actions } = usePlayer();
@@ -29,11 +34,20 @@ export function LyricsView({ song }: { song: Song }) {
   const [lyrics, setLyrics] = useState<Lyrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [romanizing, setRomanizing] = useState(false);
+  /** Bumped by "Try Again"; it is the fetch effect's only other dependency. */
+  const [attempt, setAttempt] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lineRefs = useRef<(HTMLElement | null)[]>([]);
+  const markerRef = useRef<HTMLDivElement | null>(null);
+  const markerPlaced = useRef(false);
   const lastManualScroll = useRef(0);
   const lastScrolledIndex = useRef(-1);
+
+  const retry = useCallback(() => {
+    forgetLyrics(song.id);
+    setAttempt((n) => n + 1);
+  }, [song.id]);
 
   /* ------------------------------------------------------------------ fetch */
 
@@ -43,6 +57,7 @@ export function LyricsView({ song }: { song: Song }) {
     setLoading(true);
     setLyrics(null);
     lastScrolledIndex.current = -1;
+    markerPlaced.current = false;
 
     fetchLyrics(song, controller.signal)
       .then((result) => {
@@ -59,7 +74,7 @@ export function LyricsView({ song }: { song: Song }) {
       alive = false;
       controller.abort();
     };
-  }, [song]);
+  }, [song, attempt]);
 
   /* ------------------------------------------------------------ romanization */
 
@@ -121,6 +136,73 @@ export function LyricsView({ song }: { song: Song }) {
     lastManualScroll.current = Date.now();
   }, []);
 
+  /* ------------------------------------------------------ travelling highlight */
+
+  const showOriginal = wantsRomanization && settings.showOriginalWithRomanization;
+
+  /**
+   * One highlight for the whole sheet, moved to the active line.
+   *
+   * Drawing a background on `.is-active` instead would mean the rectangle
+   * blinks out on one line and in on another, half a beat apart, so it never
+   * appears to travel with the words. Measuring the line and sliding a single
+   * element is what makes it read as one moving object.
+   */
+  const placeMarker = useCallback(
+    (animate = markerPlaced.current) => {
+      const el = markerRef.current;
+      const line = lineRefs.current[activeIndex];
+      if (!el) return;
+
+      if (activeIndex < 0 || !line || !lyrics?.lines[activeIndex]?.text.trim()) {
+        // Nothing to sit behind — during an instrumental it fades where it is.
+        el.style.opacity = '0';
+        return;
+      }
+
+      // Hug the words rather than the row: a lyric line is a full-width button,
+      // and a band running the whole way across reads as a table selection.
+      let left = line.offsetLeft;
+      let width = line.offsetWidth;
+      const range = document.createRange();
+      range.selectNodeContents(line);
+      const text = range.getBoundingClientRect();
+      if (text.width > 0) {
+        const box = line.getBoundingClientRect();
+        left = line.offsetLeft + (text.left - box.left) - MARKER_PAD;
+        width = Math.min(line.offsetWidth, text.width + MARKER_PAD * 2);
+      }
+
+      if (!animate) el.style.transition = 'none';
+      el.style.transform = `translate3d(${left}px, ${line.offsetTop}px, 0)`;
+      el.style.width = `${width}px`;
+      el.style.height = `${line.offsetHeight}px`;
+      el.style.opacity = '1';
+      if (!animate) {
+        void el.offsetHeight;
+        el.style.transition = '';
+      }
+      // Only now: a hidden marker was never placed, and animating out of the
+      // top-left corner the first time a line lands is exactly what the flag
+      // exists to prevent.
+      markerPlaced.current = true;
+    },
+    [activeIndex, lyrics],
+  );
+
+  useLayoutEffect(() => {
+    placeMarker();
+  }, [placeMarker, showOriginal, romanizing]);
+
+  /** Lines reflow when the panel is resized; the highlight has to follow. */
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => placeMarker(false));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [placeMarker]);
+
   /* ------------------------------------------------------------------ render */
 
   if (loading) {
@@ -132,23 +214,26 @@ export function LyricsView({ song }: { song: Song }) {
   }
 
   if (!lyrics || lyrics.lines.length === 0) {
+    const instrumental = lyrics?.instrumental ?? false;
     return (
-      <div className="fz-lyrics" style={{ display: 'grid', placeItems: 'center', textAlign: 'center' }}>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>
-            {lyrics?.instrumental ? 'Instrumental' : 'No lyrics available'}
+      <div className="fz-lyrics fz-lyrics--empty">
+        <div className="fz-lyrics__empty">
+          <div className="fz-lyrics__empty-title">
+            {instrumental ? 'Instrumental' : 'No lyrics found'}
           </div>
-          <div style={{ fontSize: 12, opacity: 0.6 }}>
-            {lyrics?.instrumental
+          <div className="fz-lyrics__empty-note">
+            {instrumental
               ? 'This track has no words.'
-              : 'Nothing on the server, and LRCLIB has no match for this track.'}
+              : 'Nothing attached to the file, and LRCLIB had no match for this title, artist and length.'}
           </div>
+          {/* Worth offering even for an instrumental: the tag may be wrong. */}
+          <button type="button" className="fz-btn fz-btn--glass fz-lyrics__retry" onClick={retry}>
+            <HistoryIcon /> Try Again
+          </button>
         </div>
       </div>
     );
   }
-
-  const showOriginal = wantsRomanization && settings.showOriginalWithRomanization;
 
   return (
     <>
@@ -180,6 +265,7 @@ export function LyricsView({ song }: { song: Song }) {
 
       <div className="fz-lyrics">
         <div className="fz-lyrics__scroll fz-scroll" ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll}>
+          {lyrics.synced && <div className="fz-lyrics__marker" ref={markerRef} aria-hidden="true" />}
           {lyrics.lines.map((line, i) => {
             const isActive = i === activeIndex;
             const state = isActive ? 'is-active' : i < activeIndex ? 'is-past' : i === activeIndex + 1 ? 'is-next' : '';

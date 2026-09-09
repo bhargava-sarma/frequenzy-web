@@ -266,6 +266,18 @@ export function getCachedLyrics(songId: string): Lyrics | undefined {
   return cache.get(songId);
 }
 
+/**
+ * Forget what we found (or failed to find) for a song.
+ *
+ * A miss is cached exactly like a hit, which is right for scrubbing and wrong
+ * for a retry: LRCLIB is a community database, and the sheet that was missing
+ * this morning may well be there tonight. Dropping the entry is what makes
+ * "Try Again" mean anything.
+ */
+export function forgetLyrics(songId: string): void {
+  cache.delete(songId);
+}
+
 /** Fetch lyrics for a song, trying the server first and LRCLIB second. */
 export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyrics> {
   const cached = cache.get(song.id);

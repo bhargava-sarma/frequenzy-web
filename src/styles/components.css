@@ -44,6 +44,24 @@
   background: var(--accent-hover);
 }
 
+/*
+ * For buttons that sit on artwork rather than on one of the app's own
+ * surfaces — the lyrics sheet, the full player. They cannot borrow the
+ * theme's greys, because behind them is whatever the album cover happens
+ * to be.
+ */
+.fz-btn--glass {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 6px 20px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.fz-btn--glass:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .fz-btn svg {
   width: 15px;
   height: 15px;
@@ -58,11 +76,6 @@
   color: var(--text-secondary);
   transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
-}
-
-.fz-icon-btn svg {
-  width: 17px;
-  height: 17px;
 }
 
 .fz-icon-btn:hover {
@@ -81,6 +94,26 @@
 
 .fz-icon-btn.is-on {
   color: var(--accent);
+}
+
+/*
+ * Icon weight.
+ *
+ * The glyphs are drawn light on purpose — an icon labels a control, it should
+ * not compete with the artwork beside it. Weight is how a state reads instead
+ * of colour alone, the way SF Symbols steps from regular to semibold without
+ * changing shape. `stroke-width` is inherited, so setting it on the group the
+ * glyph draws into reaches every part of it.
+ */
+.fz-icon-btn.is-on svg [stroke],
+.fz-nav-item.is-active svg [stroke],
+.fz-tab.is-active svg [stroke] {
+  stroke-width: 1.85;
+}
+
+.fz-icon-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* ------------------------------------------------------------------- inputs */

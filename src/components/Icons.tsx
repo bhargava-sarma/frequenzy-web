@@ -1,20 +1,31 @@
 /**
- * Icon set, drawn in the spirit of SF Symbols: 24×24 grid, rounded joins,
- * consistent optical weight. Filled shapes for transport controls, strokes for
- * everything else.
+ * The icon set.
+ *
+ * Drawn in the spirit of SF Symbols: one 24×24 grid, one stroke weight, round
+ * joins, and a shared optical centre so a row of them lines up. Strokes are
+ * deliberately light — an icon here labels a control, it never competes with
+ * the artwork or the type next to it. Only the transport glyphs are filled,
+ * because those are the ones you aim at without reading.
+ *
+ * Every glyph draws in `currentColor`, so weight and tone are decided by the
+ * button that owns it rather than baked in here.
  */
 
 import type { SVGProps } from 'react';
 
 type IconProps = SVGProps<SVGSVGElement>;
 
+/** The house stroke. Anything heavier starts to shout at 17px. */
 const stroke = {
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 1.7,
+  strokeWidth: 1.5,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
 };
+
+/** For the few glyphs that are pure geometry — chevrons, plus, close. */
+const bold = { ...stroke, strokeWidth: 1.7 };
 
 function Svg({ children, ...props }: IconProps) {
   return (
@@ -24,39 +35,45 @@ function Svg({ children, ...props }: IconProps) {
   );
 }
 
+/* ------------------------------------------------------------------ transport */
+
 export const PlayIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M8 5.14v13.72c0 .83.92 1.33 1.62.88l10.79-6.86a1.05 1.05 0 0 0 0-1.76L9.62 4.26A1.05 1.05 0 0 0 8 5.14Z" fill="currentColor" />
+    <path
+      d="M8.6 6.1v11.8c0 .84.93 1.35 1.64.9l9.2-5.9a1.06 1.06 0 0 0 0-1.8l-9.2-5.9a1.06 1.06 0 0 0-1.64.9Z"
+      fill="currentColor"
+    />
   </Svg>
 );
 
 export const PauseIcon = (p: IconProps) => (
   <Svg {...p}>
-    <rect x="6.5" y="4.75" width="4" height="14.5" rx="1.35" fill="currentColor" />
-    <rect x="13.5" y="4.75" width="4" height="14.5" rx="1.35" fill="currentColor" />
+    <rect x="7.1" y="5.4" width="3.6" height="13.2" rx="1.5" fill="currentColor" />
+    <rect x="13.3" y="5.4" width="3.6" height="13.2" rx="1.5" fill="currentColor" />
   </Svg>
 );
 
 export const NextIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M4 6.2v11.6c0 .8.88 1.28 1.55.85l8.2-5.8a1 1 0 0 0 0-1.7l-8.2-5.8A1 1 0 0 0 4 6.2Z" fill="currentColor" />
-    <rect x="17.4" y="5" width="2.6" height="14" rx="1.3" fill="currentColor" />
+    <path d="M4.8 7v10c0 .78.86 1.25 1.5.82l7.4-5a1 1 0 0 0 0-1.64l-7.4-5A1 1 0 0 0 4.8 7Z" fill="currentColor" />
+    <rect x="16.6" y="6.2" width="2.3" height="11.6" rx="1.15" fill="currentColor" />
   </Svg>
 );
 
 export const PreviousIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M20 6.2v11.6c0 .8-.88 1.28-1.55.85l-8.2-5.8a1 1 0 0 1 0-1.7l8.2-5.8A1 1 0 0 1 20 6.2Z" fill="currentColor" />
-    <rect x="4" y="5" width="2.6" height="14" rx="1.3" fill="currentColor" />
+    <path d="M19.2 7v10c0 .78-.86 1.25-1.5.82l-7.4-5a1 1 0 0 1 0-1.64l7.4-5a1 1 0 0 1 1.5.82Z" fill="currentColor" />
+    <rect x="5.1" y="6.2" width="2.3" height="11.6" rx="1.15" fill="currentColor" />
   </Svg>
 );
 
 export const ShuffleIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M3 6.8h3.1c1.2 0 2.3.6 3 1.6l5 7.2c.7 1 1.8 1.6 3 1.6H21" />
-      <path d="M3 17.2h3.1c1.2 0 2.3-.6 3-1.6l5-7.2c.7-1 1.8-1.6 3-1.6H21" />
-      <path d="m18.4 4.2 2.6 2.6-2.6 2.6M18.4 14.6l2.6 2.6-2.6 2.6" />
+      <path d="M3.5 7h2.6c1.15 0 2.22.58 2.86 1.54l4.08 6.12A3.43 3.43 0 0 0 15.9 17h4.6" />
+      <path d="M3.5 17h2.6c1.15 0 2.22-.58 2.86-1.54" />
+      <path d="M15.9 7h4.6" />
+      <path d="m18.4 4.7 2.3 2.3-2.3 2.3M18.4 14.7l2.3 2.3-2.3 2.3" />
     </g>
   </Svg>
 );
@@ -64,10 +81,10 @@ export const ShuffleIcon = (p: IconProps) => (
 export const RepeatIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M7 4.8h9.2A3.8 3.8 0 0 1 20 8.6v1.6" />
-      <path d="m17.6 2.4 2.5 2.4-2.5 2.4" />
-      <path d="M17 19.2H7.8A3.8 3.8 0 0 1 4 15.4v-1.6" />
-      <path d="m6.4 21.6-2.5-2.4 2.5-2.4" />
+      <path d="M7.4 5.6h8.4a3.6 3.6 0 0 1 3.6 3.6v1.2" />
+      <path d="m16.9 3.2 2.4 2.4-2.4 2.4" />
+      <path d="M16.6 18.4H8.2a3.6 3.6 0 0 1-3.6-3.6v-1.2" />
+      <path d="m7.1 20.8-2.4-2.4 2.4-2.4" />
     </g>
   </Svg>
 );
@@ -75,62 +92,110 @@ export const RepeatIcon = (p: IconProps) => (
 export const RepeatOneIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M7 4.8h9.2A3.8 3.8 0 0 1 20 8.6v1.6" />
-      <path d="m17.6 2.4 2.5 2.4-2.5 2.4" />
-      <path d="M17 19.2H7.8A3.8 3.8 0 0 1 4 15.4v-1.6" />
-      <path d="m6.4 21.6-2.5-2.4 2.5-2.4" />
+      <path d="M7.4 5.6h8.4a3.6 3.6 0 0 1 3.6 3.6v1.2" />
+      <path d="m16.9 3.2 2.4 2.4-2.4 2.4" />
+      <path d="M16.6 18.4H8.2a3.6 3.6 0 0 1-3.6-3.6v-1.2" />
+      <path d="m7.1 20.8-2.4-2.4 2.4-2.4" />
+      <path d="M11.1 10.4 12.6 9.5v5.2" />
     </g>
-    <text x="12" y="14.6" textAnchor="middle" fontSize="8.4" fontWeight="700" fill="currentColor" fontFamily="system-ui, sans-serif">1</text>
   </Svg>
+);
+
+/* --------------------------------------------------------------------- volume */
+
+/** One speaker body, shared by all three states so they never jump. */
+const speaker = (
+  <path
+    d="M11 5.6 7.4 8.6H4.9a1 1 0 0 0-1 1v4.8a1 1 0 0 0 1 1h2.5l3.6 3c.65.55 1.65.09 1.65-.77V6.37c0-.86-1-1.32-1.65-.77Z"
+    fill="currentColor"
+  />
 );
 
 export const VolumeHighIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M11.2 4.6 6.9 8.2H4.2c-.7 0-1.2.5-1.2 1.2v5.2c0 .7.5 1.2 1.2 1.2h2.7l4.3 3.6c.7.6 1.8.1 1.8-.9V5.5c0-1-1.1-1.5-1.8-.9Z" fill="currentColor" />
+    {speaker}
     <g {...stroke}>
-      <path d="M16.6 9.1a4.1 4.1 0 0 1 0 5.8" />
-      <path d="M19.2 6.5a7.8 7.8 0 0 1 0 11" />
+      <path d="M16.4 9.5a3.6 3.6 0 0 1 0 5" />
+      <path d="M18.9 7.2a7 7 0 0 1 0 9.6" />
     </g>
   </Svg>
 );
 
 export const VolumeLowIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M11.2 4.6 6.9 8.2H4.2c-.7 0-1.2.5-1.2 1.2v5.2c0 .7.5 1.2 1.2 1.2h2.7l4.3 3.6c.7.6 1.8.1 1.8-.9V5.5c0-1-1.1-1.5-1.8-.9Z" fill="currentColor" />
-    <path d="M16.6 9.1a4.1 4.1 0 0 1 0 5.8" {...stroke} />
+    {speaker}
+    <path d="M16.4 9.5a3.6 3.6 0 0 1 0 5" {...stroke} />
   </Svg>
 );
 
 export const VolumeMuteIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M11.2 4.6 6.9 8.2H4.2c-.7 0-1.2.5-1.2 1.2v5.2c0 .7.5 1.2 1.2 1.2h2.7l4.3 3.6c.7.6 1.8.1 1.8-.9V5.5c0-1-1.1-1.5-1.8-.9Z" fill="currentColor" />
-    <path d="m16.4 9.6 4.4 4.8M20.8 9.6l-4.4 4.8" {...stroke} />
+    {speaker}
+    <path d="m16.4 9.8 4.2 4.4M20.6 9.8l-4.2 4.4" {...stroke} />
   </Svg>
 );
 
+/* ---------------------------------------------------------------------- lists */
+
+/** Lyrics: a quote bubble, so it never reads as another list. */
 export const LyricsIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M4.5 5.5h15M4.5 10h11M4.5 14.5h15M4.5 19h8" />
+      <path d="M4.6 6.4a2 2 0 0 1 2-2h10.8a2 2 0 0 1 2 2v7.4a2 2 0 0 1-2 2h-6.3L7 19.4v-3.6H6.6a2 2 0 0 1-2-2Z" />
+      <path d="M8.6 8.9h6.8M8.6 12h4.4" />
     </g>
   </Svg>
 );
 
+/** Playing Next: a list with a note riding along at the end. */
 export const QueueIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M4 6.5h10M4 11h10M4 15.5h6" />
-      <path d="M17.6 15.4V7.2l3.4-.9" />
-      <circle cx="15.9" cy="16.6" r="1.9" />
+      <path d="M4 6.6h10M4 11h10M4 15.4h6.4" />
+      <path d="M17.6 16.2V8l3.4-.9" />
+      <circle cx="15.9" cy="17" r="1.7" />
     </g>
   </Svg>
 );
+
+/** Play Next: the triangle sits against the first line — it jumps the queue. */
+export const PlayNextIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4.2 5.1v3.6c0 .55.61.88 1.07.58l2.8-1.8a.69.69 0 0 0 0-1.16l-2.8-1.8a.69.69 0 0 0-1.07.58Z" fill="currentColor" />
+    <g {...stroke}>
+      <path d="M10.6 6.9h9.4M4 12.4h16M4 17.6h16" />
+    </g>
+  </Svg>
+);
+
+/** Add to Queue: same glyph, triangle against the last line — it waits its turn. */
+export const AddToQueueIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <path d="M4 6.4h16M4 11.6h16M10.6 17.1h9.4" />
+    </g>
+    <path d="M4.2 15.3v3.6c0 .55.61.88 1.07.58l2.8-1.8a.69.69 0 0 0 0-1.16l-2.8-1.8a.69.69 0 0 0-1.07.58Z" fill="currentColor" />
+  </Svg>
+);
+
+/** Playlists are a stack of things, not another list of lines. */
+export const PlaylistIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <g {...stroke}>
+      <rect x="4" y="8.6" width="16" height="11.4" rx="2.4" />
+      <path d="M6.4 5.8h11.2M8.2 3.4h7.6" />
+      <path d="M10.6 16.2v-4.1l3.4 2.05Z" fill="currentColor" strokeWidth="1.2" />
+    </g>
+  </Svg>
+);
+
+/* ------------------------------------------------------------------ navigation */
 
 export const SearchIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="10.8" cy="10.8" r="6.3" />
-      <path d="m15.6 15.6 4 4" />
+      <circle cx="10.9" cy="10.9" r="6.4" />
+      <path d="m15.7 15.7 3.8 3.8" />
     </g>
   </Svg>
 );
@@ -138,8 +203,8 @@ export const SearchIcon = (p: IconProps) => (
 export const ListenNowIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="M10.2 9.1v5.8l4.7-2.9z" fill="currentColor" strokeWidth="1.2" />
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M10.4 9.3v5.4l4.4-2.7Z" fill="currentColor" strokeWidth="1.2" />
     </g>
   </Svg>
 );
@@ -147,10 +212,10 @@ export const ListenNowIcon = (p: IconProps) => (
 export const BrowseIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <rect x="3.8" y="3.8" width="7" height="7" rx="2" />
-      <rect x="13.2" y="3.8" width="7" height="7" rx="2" />
-      <rect x="3.8" y="13.2" width="7" height="7" rx="2" />
-      <rect x="13.2" y="13.2" width="7" height="7" rx="2" />
+      <rect x="3.9" y="3.9" width="7" height="7" rx="2.1" />
+      <rect x="13.1" y="3.9" width="7" height="7" rx="2.1" />
+      <rect x="3.9" y="13.1" width="7" height="7" rx="2.1" />
+      <rect x="13.1" y="13.1" width="7" height="7" rx="2.1" />
     </g>
   </Svg>
 );
@@ -158,9 +223,9 @@ export const BrowseIcon = (p: IconProps) => (
 export const RadioIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="2.1" />
-      <path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 15.8a5.4 5.4 0 0 0 0-7.6" />
-      <path d="M5.4 5.4a9.3 9.3 0 0 0 0 13.2M18.6 18.6a9.3 9.3 0 0 0 0-13.2" />
+      <circle cx="12" cy="12" r="1.9" />
+      <path d="M8.4 8.4a5.1 5.1 0 0 0 0 7.2M15.6 15.6a5.1 5.1 0 0 0 0-7.2" />
+      <path d="M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 18.3a8.9 8.9 0 0 0 0-12.6" />
     </g>
   </Svg>
 );
@@ -168,8 +233,8 @@ export const RadioIcon = (p: IconProps) => (
 export const ClockIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="M12 7.2V12l3.2 1.9" />
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M12 7.6V12l3 1.8" />
     </g>
   </Svg>
 );
@@ -177,8 +242,8 @@ export const ClockIcon = (p: IconProps) => (
 export const ArtistIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="8.4" r="3.7" />
-      <path d="M5.2 19.6a6.8 6.8 0 0 1 13.6 0" />
+      <circle cx="12" cy="8.6" r="3.6" />
+      <path d="M5.4 19.6a6.6 6.6 0 0 1 13.2 0" />
     </g>
   </Svg>
 );
@@ -186,8 +251,8 @@ export const ArtistIcon = (p: IconProps) => (
 export const AlbumIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="8.4" />
-      <circle cx="12" cy="12" r="2.3" />
+      <circle cx="12" cy="12" r="8.2" />
+      <circle cx="12" cy="12" r="2.2" />
     </g>
   </Svg>
 );
@@ -195,39 +260,31 @@ export const AlbumIcon = (p: IconProps) => (
 export const NoteIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M9.4 17.4V5.9l9.2-2.3v11.2" />
-      <circle cx="7" cy="17.8" r="2.6" />
-      <circle cx="16.2" cy="15.4" r="2.6" />
+      <path d="M9.6 17V6.2l8.8-2.2V14.8" />
+      <circle cx="7.2" cy="17.4" r="2.5" />
+      <circle cx="16" cy="15.2" r="2.5" />
     </g>
   </Svg>
 );
 
+/** Genres get a waveform: no other glyph in the set is vertical. */
 export const GenreIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M4.5 15.5V9a1 1 0 0 1 1-1h3l3.4-2.8a.8.8 0 0 1 1.3.6v12.4a.8.8 0 0 1-1.3.6L8.5 16h-3a1 1 0 0 1-1-1Z" />
-      <path d="M17 9.4a4 4 0 0 1 0 5.2" />
+      <path d="M4.4 10.4v3.2M8.2 7.4v9.2M12 4.8v14.4M15.8 8.4v7.2M19.6 10.8v2.4" />
     </g>
   </Svg>
 );
 
-export const PlaylistIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <g {...stroke}>
-      <path d="M4 6.5h12M4 11h12M4 15.5h7" />
-      <path d="M18.4 18.5v-6.2l2.6-.7" />
-      <circle cx="16.9" cy="19.4" r="1.6" />
-    </g>
-  </Svg>
-);
+/* ------------------------------------------------------------------- symbols */
 
 export const HeartIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
   <Svg {...p}>
     <path
-      d="M12 20.2s-7.6-4.6-7.6-9.7A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.6 2.9c0 5.1-7.6 9.7-7.6 9.7Z"
+      d="M12 19.9C9.5 18.2 4.6 14.6 4.6 10.7A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.4 2.7c0 3.9-4.9 7.5-7.4 9.2Z"
       fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={1.5}
       strokeLinejoin="round"
     />
   </Svg>
@@ -236,10 +293,10 @@ export const HeartIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) =>
 export const StarIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
   <Svg {...p}>
     <path
-      d="m12 4 2.42 4.9 5.41.79-3.92 3.82.93 5.39L12 16.36 7.16 18.9l.93-5.39-3.92-3.82 5.41-.79Z"
+      d="m12 4.4 2.32 4.7 5.18.75-3.75 3.66.89 5.17L12 16.24l-4.64 2.44.89-5.17L4.5 9.85l5.18-.75Z"
       fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
-      strokeWidth={1.6}
+      strokeWidth={1.5}
       strokeLinejoin="round"
     />
   </Svg>
@@ -247,42 +304,42 @@ export const StarIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => 
 
 export const EllipsisIcon = (p: IconProps) => (
   <Svg {...p}>
-    <circle cx="5.4" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="12" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="18.6" cy="12" r="1.75" fill="currentColor" />
+    <circle cx="5.6" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="18.4" cy="12" r="1.6" fill="currentColor" />
   </Svg>
 );
 
 export const ChevronLeftIcon = (p: IconProps) => (
-  <Svg {...p}><path d="m14.6 5.4-6.6 6.6 6.6 6.6" {...stroke} strokeWidth={2} /></Svg>
+  <Svg {...p}><path d="M14.4 5.6 8 12l6.4 6.4" {...bold} /></Svg>
 );
 
 export const ChevronRightIcon = (p: IconProps) => (
-  <Svg {...p}><path d="m9.4 5.4 6.6 6.6-6.6 6.6" {...stroke} strokeWidth={2} /></Svg>
+  <Svg {...p}><path d="M9.6 5.6 16 12l-6.4 6.4" {...bold} /></Svg>
 );
 
 export const ChevronDownIcon = (p: IconProps) => (
-  <Svg {...p}><path d="m5.4 9.4 6.6 6.6 6.6-6.6" {...stroke} strokeWidth={2} /></Svg>
+  <Svg {...p}><path d="M5.6 9.6 12 16l6.4-6.4" {...bold} /></Svg>
 );
 
 export const PlusIcon = (p: IconProps) => (
-  <Svg {...p}><path d="M12 5v14M5 12h14" {...stroke} strokeWidth={1.9} /></Svg>
+  <Svg {...p}><path d="M12 5.2v13.6M5.2 12h13.6" {...bold} /></Svg>
 );
 
 export const CheckIcon = (p: IconProps) => (
-  <Svg {...p}><path d="m4.8 12.6 4.7 4.7L19.2 7.6" {...stroke} strokeWidth={2} /></Svg>
+  <Svg {...p}><path d="m5 12.4 4.6 4.6L19 7.2" {...bold} /></Svg>
 );
 
 export const CloseIcon = (p: IconProps) => (
-  <Svg {...p}><path d="m6 6 12 12M18 6 6 18" {...stroke} strokeWidth={1.9} /></Svg>
+  <Svg {...p}><path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6" {...bold} /></Svg>
 );
 
 export const DownloadIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M12 3.8v10.6" />
-      <path d="m7.6 10.4 4.4 4.4 4.4-4.4" />
-      <path d="M4.6 17.4v1.4a1.6 1.6 0 0 0 1.6 1.6h11.6a1.6 1.6 0 0 0 1.6-1.6v-1.4" />
+      <path d="M12 4.2v10.2" />
+      <path d="m7.9 10.6 4.1 4.1 4.1-4.1" />
+      <path d="M4.8 16.8v1.4a1.8 1.8 0 0 0 1.8 1.8h10.8a1.8 1.8 0 0 0 1.8-1.8v-1.4" />
     </g>
   </Svg>
 );
@@ -290,35 +347,38 @@ export const DownloadIcon = (p: IconProps) => (
 export const InfoIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="M12 11v5.2" />
-      <circle cx="12" cy="8" r=".9" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M12 11.2v5" />
+      <circle cx="12" cy="8.1" r=".85" fill="currentColor" stroke="none" />
     </g>
   </Svg>
 );
 
+/** Sliders rather than a gear: a 12-tooth cog turns to mush at 17px. */
 export const SettingsIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="2.9" />
-      <path d="M19.3 14.6a1.5 1.5 0 0 0 .3 1.65l.06.06a1.8 1.8 0 1 1-2.55 2.55l-.06-.06a1.5 1.5 0 0 0-1.65-.3 1.5 1.5 0 0 0-.9 1.37v.17a1.8 1.8 0 1 1-3.6 0v-.09a1.5 1.5 0 0 0-.98-1.37 1.5 1.5 0 0 0-1.65.3l-.06.06a1.8 1.8 0 1 1-2.55-2.55l.06-.06a1.5 1.5 0 0 0 .3-1.65 1.5 1.5 0 0 0-1.37-.9h-.17a1.8 1.8 0 1 1 0-3.6h.09a1.5 1.5 0 0 0 1.37-.98 1.5 1.5 0 0 0-.3-1.65l-.06-.06A1.8 1.8 0 1 1 8.11 4.9l.06.06a1.5 1.5 0 0 0 1.65.3h.07a1.5 1.5 0 0 0 .9-1.37v-.17a1.8 1.8 0 1 1 3.6 0v.09a1.5 1.5 0 0 0 .9 1.37 1.5 1.5 0 0 0 1.65-.3l.06-.06a1.8 1.8 0 1 1 2.55 2.55l-.06.06a1.5 1.5 0 0 0-.3 1.65v.07a1.5 1.5 0 0 0 1.37.9h.17a1.8 1.8 0 1 1 0 3.6h-.09a1.5 1.5 0 0 0-1.37.9Z" />
+      <path d="M4 8.2h3.4M12.2 8.2H20" />
+      <path d="M4 15.8h7.8M16.6 15.8H20" />
+      <circle cx="9.8" cy="8.2" r="2.4" />
+      <circle cx="14.2" cy="15.8" r="2.4" />
     </g>
   </Svg>
 );
 
 export const GripIcon = (p: IconProps) => (
   <Svg {...p}>
-    <g {...stroke}><path d="M8.5 7.5h7M8.5 12h7M8.5 16.5h7" /></g>
+    <g {...stroke}><path d="M9 8.4h6M9 12h6M9 15.6h6" /></g>
   </Svg>
 );
 
 export const WifiIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M2.6 8.8a14.4 14.4 0 0 1 18.8 0" />
-      <path d="M6 12.4a9.4 9.4 0 0 1 12 0" />
-      <path d="M9.4 16a4.4 4.4 0 0 1 5.2 0" />
-      <circle cx="12" cy="19.2" r=".9" fill="currentColor" stroke="none" />
+      <path d="M3 9a13.6 13.6 0 0 1 18 0" />
+      <path d="M6.2 12.4a9 9 0 0 1 11.6 0" />
+      <path d="M9.5 15.8a4.2 4.2 0 0 1 5 0" />
+      <circle cx="12" cy="19" r=".9" fill="currentColor" stroke="none" />
     </g>
   </Svg>
 );
@@ -326,26 +386,27 @@ export const WifiIcon = (p: IconProps) => (
 export const GlobeIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="M3.6 12h16.8" />
-      <path d="M12 3.6a13 13 0 0 1 0 16.8 13 13 0 0 1 0-16.8Z" />
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M3.9 12h16.2" />
+      <path d="M12 3.8a12.6 12.6 0 0 1 0 16.4 12.6 12.6 0 0 1 0-16.4Z" />
     </g>
   </Svg>
 );
 
 export const SparkleIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M12 3.4 13.7 9l5.6 1.7-5.6 1.7L12 18l-1.7-5.6L4.7 10.7 10.3 9Z" fill="currentColor" />
-    <path d="m18.6 3 .8 2.6 2.6.8-2.6.8-.8 2.6-.8-2.6-2.6-.8 2.6-.8Z" fill="currentColor" opacity=".7" />
+    <path d="M11.2 4.2 12.7 9l4.8 1.5-4.8 1.5-1.5 4.8-1.5-4.8L4.9 10.5 9.7 9Z" fill="currentColor" />
+    <path d="m18.4 14.4.75 2.25 2.25.75-2.25.75-.75 2.25-.75-2.25-2.25-.75 2.25-.75Z" fill="currentColor" opacity=".55" />
   </Svg>
 );
 
 export const TrashIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M4.8 6.6h14.4" />
-      <path d="M9.2 6.6V5.2a1.4 1.4 0 0 1 1.4-1.4h2.8a1.4 1.4 0 0 1 1.4 1.4v1.4" />
-      <path d="M6.6 6.6 7.4 19a1.4 1.4 0 0 0 1.4 1.3h6.4a1.4 1.4 0 0 0 1.4-1.3l.8-12.4" />
+      <path d="M4.8 6.8h14.4" />
+      <path d="M9.6 6.8V5.6a1.4 1.4 0 0 1 1.4-1.4h2a1.4 1.4 0 0 1 1.4 1.4v1.2" />
+      <path d="M6.9 6.8 7.6 18.6a1.4 1.4 0 0 0 1.4 1.3h6a1.4 1.4 0 0 0 1.4-1.3l.7-11.8" />
+      <path d="M10.6 10.2v6M13.4 10.2v6" opacity=".55" />
     </g>
   </Svg>
 );
@@ -353,8 +414,8 @@ export const TrashIcon = (p: IconProps) => (
 export const PencilIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M15.6 4.8 19.2 8.4 8.6 19H5v-3.6Z" />
-      <path d="m13.8 6.6 3.6 3.6" />
+      <path d="M15.8 5 19 8.2 8.7 18.5 4.8 19.2l.7-3.9Z" />
+      <path d="m13.9 6.9 3.2 3.2" />
     </g>
   </Svg>
 );
@@ -362,12 +423,11 @@ export const PencilIcon = (p: IconProps) => (
 export const LanguageIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M3.6 6h8.8" />
-      <path d="M8 4.2V6" />
-      <path d="M10.4 6c0 3.6-2.6 7-6.8 8.4" />
-      <path d="M5.4 9.6c1.2 2.2 3.2 3.8 5.6 4.6" />
-      <path d="m12.8 20 3.6-9 3.6 9" />
-      <path d="M13.9 17.4h5" />
+      <path d="M3.6 6.4h7.6M7.4 4.6v1.8" />
+      <path d="M9.6 6.4c0 3.4-2.5 6.4-6 7.6" />
+      <path d="M5.2 9.9c1.1 2 2.9 3.4 5 4.2" />
+      <path d="m12.6 19.8 3.5-8.4 3.5 8.4" />
+      <path d="M13.8 17.2h4.6" />
     </g>
   </Svg>
 );
@@ -375,7 +435,7 @@ export const LanguageIcon = (p: IconProps) => (
 export const InfinityIcon = (p: IconProps) => (
   <Svg {...p}>
     <path
-      d="M8.4 8.6a3.4 3.4 0 1 0 0 6.8c1.5 0 2.5-1 3.6-2.4 1.1-1.4 2.1-2.4 3.6-2.4a3.4 3.4 0 1 1 0 6.8c-1.5 0-2.5-1-3.6-2.4-1.1-1.4-2.1-2.4-3.6-2.4Z"
+      d="M8.5 8.8a3.2 3.2 0 1 0 0 6.4c1.4 0 2.35-.95 3.5-2.35C13.15 11.45 14.1 10.5 15.5 10.5a3.2 3.2 0 1 1 0 6.4c-1.4 0-2.35-.95-3.5-2.35-1.15-1.4-2.1-2.35-3.5-2.35Z"
       {...stroke}
     />
   </Svg>
@@ -383,14 +443,14 @@ export const InfinityIcon = (p: IconProps) => (
 
 export const MoonIcon = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M20 14.2A8.4 8.4 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z" {...stroke} />
+    <path d="M19.6 14.4A8.2 8.2 0 0 1 9.6 4.4a8.2 8.2 0 1 0 10 10Z" {...stroke} />
   </Svg>
 );
 
 export const SortIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M4.6 6.6h14.8M6.8 12h10.4M9.6 17.4h4.8" />
+      <path d="M4.8 7h14.4M6.8 12h10.4M9.4 17h5.2" />
     </g>
   </Svg>
 );
@@ -398,10 +458,10 @@ export const SortIcon = (p: IconProps) => (
 export const GridIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <rect x="4" y="4" width="6.6" height="6.6" rx="1.6" />
-      <rect x="13.4" y="4" width="6.6" height="6.6" rx="1.6" />
-      <rect x="4" y="13.4" width="6.6" height="6.6" rx="1.6" />
-      <rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.6" />
+      <rect x="4.2" y="4.2" width="6.4" height="6.4" rx="1.7" />
+      <rect x="13.4" y="4.2" width="6.4" height="6.4" rx="1.7" />
+      <rect x="4.2" y="13.4" width="6.4" height="6.4" rx="1.7" />
+      <rect x="13.4" y="13.4" width="6.4" height="6.4" rx="1.7" />
     </g>
   </Svg>
 );
@@ -409,10 +469,10 @@ export const GridIcon = (p: IconProps) => (
 export const ListIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M8.6 6.4h11M8.6 12h11M8.6 17.6h11" />
-      <circle cx="4.8" cy="6.4" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="4.8" cy="12" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="4.8" cy="17.6" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M8.8 6.6h10.6M8.8 12h10.6M8.8 17.4h10.6" />
+      <circle cx="5" cy="6.6" r="1" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="17.4" r="1" fill="currentColor" stroke="none" />
     </g>
   </Svg>
 );
@@ -420,9 +480,9 @@ export const ListIcon = (p: IconProps) => (
 export const ShareIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M12 3.6v11" />
-      <path d="m8.2 7.2 3.8-3.6 3.8 3.6" />
-      <path d="M5.4 12.6v6.2a1.6 1.6 0 0 0 1.6 1.6h10a1.6 1.6 0 0 0 1.6-1.6v-6.2" />
+      <path d="M12 4v10.6" />
+      <path d="m8.4 7.4 3.6-3.4 3.6 3.4" />
+      <path d="M5.6 12.8v5.8a1.6 1.6 0 0 0 1.6 1.6h9.6a1.6 1.6 0 0 0 1.6-1.6v-5.8" />
     </g>
   </Svg>
 );
@@ -430,17 +490,15 @@ export const ShareIcon = (p: IconProps) => (
 export const HistoryIcon = (p: IconProps) => (
   <Svg {...p}>
     <g {...stroke}>
-      <path d="M3.8 12a8.2 8.2 0 1 0 2.5-5.9" />
-      <path d="M3.6 4.4v4h4" />
-      <path d="M12 7.6V12l3 1.8" />
+      <path d="M4 12a8 8 0 1 0 2.5-5.8" />
+      <path d="M3.8 4.8v3.9h3.9" />
+      <path d="M12 7.8V12l2.9 1.7" />
     </g>
   </Svg>
 );
 
 export const FilterIcon = (p: IconProps) => (
   <Svg {...p}>
-    <g {...stroke}>
-      <path d="M3.8 6.2h16.4l-6.4 7.4v5.2l-3.6 1.8v-7z" />
-    </g>
+    <path d="M4.2 6.4h15.6l-6.1 7v5l-3.4 1.7v-6.7z" {...stroke} />
   </Svg>
 );

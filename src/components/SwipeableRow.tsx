@@ -1,10 +1,10 @@
 /**
  * A list row you can act on by swiping.
  *
- * Swiping left pulls a drawer out of the right edge (Play Next / Play Last);
- * swiping right pulls one out of the left (Favourite). Dragging well past the
- * drawer commits its first action without lifting a finger, which is the
- * shortcut iOS teaches everywhere.
+ * Swiping left pulls a drawer out of the right edge, swiping right pulls one
+ * out of the left. Dragging well past the drawer commits its first action
+ * without lifting a finger, which is the shortcut iOS teaches everywhere — so
+ * whatever each list wants a flick to mean has to be listed first.
  */
 
 import { type CSSProperties, type ReactNode } from 'react';

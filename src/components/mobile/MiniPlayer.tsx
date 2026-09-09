@@ -1,5 +1,5 @@
 /**
- * The docked player above the tab bar.
+ * The now playing capsule, floating above the tab bar.
  *
  * Tapping or flicking up expands the full sheet; swiping sideways skips
  * tracks, which is the gesture iOS trains you to expect here.
@@ -84,19 +84,22 @@ export function MiniPlayer({ onExpand }: { onExpand: () => void }) {
         if (event.key === 'Enter') onExpand();
       }}
     >
-      <div className="fz-mini__progress" style={{ width: `${progress}%` }} />
-
-      <div key={current.id} className="fz-swap-art">
+      <div key={current.id} className="fz-swap-art" style={{ position: 'relative', zIndex: 2 }}>
         <Artwork coverArt={current.coverArt} name={current.title} size={120} className="fz-mini__art" />
       </div>
 
-      <div
-        key={`${current.id}-text`}
-        className="fz-mini__text fz-swap-text"
-        style={{ transform: `translateX(${nudge}px)` }}
-      >
-        <span className="fz-mini__title fz-truncate">{current.title}</span>
-        <span className="fz-mini__sub fz-truncate">{songArtist(current)}</span>
+      <div className="fz-mini__body">
+        <div
+          key={`${current.id}-text`}
+          className="fz-mini__text fz-swap-text"
+          style={{ transform: `translateX(${nudge}px)` }}
+        >
+          <span className="fz-mini__title fz-truncate">{current.title}</span>
+          <span className="fz-mini__sub fz-truncate">{songArtist(current)}</span>
+        </div>
+        <div className="fz-mini__track">
+          <div className="fz-mini__progress" style={{ width: `${progress}%` }} />
+        </div>
       </div>
 
       <div className="fz-mini__actions">

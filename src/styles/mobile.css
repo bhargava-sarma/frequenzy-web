@@ -41,9 +41,6 @@
   height: calc(var(--tabbar-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   border-top: 1px solid var(--separator);
-  background: var(--glass-tint-strong);
-  backdrop-filter: blur(50px) saturate(190%);
-  -webkit-backdrop-filter: blur(50px) saturate(190%);
 }
 
 .fz-tab {
@@ -62,8 +59,8 @@
 }
 
 .fz-tab svg {
-  width: 23px;
-  height: 23px;
+  width: 22px;
+  height: 22px;
   transition: transform var(--dur) var(--ease-spring);
 }
 
@@ -77,43 +74,75 @@
 
 /* ------------------------------------------------------------- mini player */
 
+/*
+ * A capsule floating over the content, clear of the tab bar under it.
+ *
+ * Docking it to the tab bar made two bars stacked into one grey slab at the
+ * bottom of the screen. Lifting it off gives the glass an edge to catch light
+ * on, and lets artwork scroll visibly underneath — which is the whole point of
+ * the material.
+ */
 .fz-mini {
-  position: relative;
+  position: absolute;
+  left: calc(var(--safe-left) + 10px);
+  right: calc(var(--safe-right) + 10px);
+  bottom: calc(var(--tabbar-height) + var(--safe-bottom) + var(--mini-inset));
   z-index: 46;
-  flex: none;
   display: grid;
   grid-template-columns: 44px 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   height: var(--miniplayer-height);
-  padding: 0 8px 0 8px;
-  border-top: 1px solid var(--separator);
-  background: var(--glass-tint-strong);
-  backdrop-filter: blur(50px) saturate(190%);
-  -webkit-backdrop-filter: blur(50px) saturate(190%);
+  padding: 0 6px 0 7px;
+  border-radius: var(--radius-pill);
+  /* See the note on .fz-bar: isolating a capsule kills its own backdrop. */
   /* The bar owns both axes: sideways skips tracks, upward opens the player. */
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
 }
 
-/* A hairline progress bar along the very top edge, as on iOS. */
-.fz-mini__progress {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 0 2px 2px 0;
-  transition: width 240ms linear;
+/*
+ * Progress lives under the title, in the same column, rather than being pinned
+ * to the capsule's bottom edge with magic offsets — pinned, it ran underneath
+ * the artwork and the buttons at either end.
+ */
+.fz-mini__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+  z-index: 2;
+}
+
+.fz-mini__track {
+  height: 2.5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
   pointer-events: none;
 }
 
+:root[data-theme='light'] .fz-mini__track {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.fz-mini__progress {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  transition: width 240ms linear;
+}
+
 .fz-mini__art {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+  position: relative;
+  z-index: 2;
 }
 
 .fz-mini__text {
@@ -136,7 +165,9 @@
 .fz-mini__actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .fz-mini__btn {
@@ -150,8 +181,8 @@
 }
 
 .fz-mini__btn svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .fz-mini__btn:active {
@@ -238,7 +269,9 @@
 }
 
 .fz-swipe-action--next { background: #8e5cf6; }
-.fz-swipe-action--last { background: #4a4a52; }
+/* Add to Queue leads the right-hand drawer now, so it gets a colour of its own
+   rather than the neutral grey a secondary action could live with. */
+.fz-swipe-action--last { background: #0f9d8f; }
 .fz-swipe-action--love { background: var(--accent); }
 .fz-swipe-action--playlist { background: #2f7de1; }
 .fz-swipe-action--remove { background: #ff3b30; }

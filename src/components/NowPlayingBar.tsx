@@ -1,7 +1,11 @@
 /**
- * The bottom bar: transport on the left, the "LCD" display in the middle, and
- * lyrics / queue / volume on the right — the arrangement Apple Music uses on
- * the desktop. Clicking the LCD raises the full-screen player.
+ * The now playing capsule.
+ *
+ * Transport on the left, the "LCD" display in the middle, lyrics / queue /
+ * volume on the right — the arrangement Apple Music uses on the desktop, in a
+ * pill that floats clear of the window edges. Shuffle and repeat sit beside the
+ * transport rather than across the bar from it, because they are decisions
+ * about the same thing. Clicking the LCD raises the full-screen player.
  */
 
 import { useState } from 'react';
@@ -15,6 +19,7 @@ import {
 } from './Icons';
 import { useContextMenu } from './ContextMenu';
 import { formatTime, qualityBadge, songArtist } from '../lib/format';
+import { useGlassPointer } from '../hooks/useGlassPointer';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { usePlayer } from '../state/player';
@@ -33,14 +38,31 @@ export function NowPlayingBar({ onExpand, panel, onPanelChange }: NowPlayingBarP
   const { songMenu } = useMediaMenu();
   const { openAt, menu } = useContextMenu();
   const [scrubbing, setScrubbing] = useState(false);
+  // The specular pool follows the cursor across the glass.
+  const glass = useGlassPointer<HTMLDivElement>();
 
   const starred = current ? isStarred('song', current.id) : false;
   const badge = qualityBadge(current);
   const VolumeIcon = muted || volume === 0 ? VolumeMuteIcon : volume < 0.5 ? VolumeLowIcon : VolumeHighIcon;
 
   return (
-    <div className="fz-bar">
+    <div
+      className="fz-bar"
+      ref={glass.ref}
+      onPointerMove={glass.onPointerMove}
+      onPointerLeave={glass.onPointerLeave}
+    >
       <div className="fz-bar__left">
+        <button
+          type="button"
+          className={`fz-icon-btn ${shuffle ? 'is-on' : ''}`}
+          aria-label="Shuffle"
+          aria-pressed={shuffle}
+          onClick={actions.toggleShuffle}
+          disabled={!current}
+        >
+          <ShuffleIcon />
+        </button>
         <div className="fz-transport">
           <button type="button" className="fz-transport__btn" aria-label="Previous" onClick={actions.previous} disabled={!current}>
             <PreviousIcon />
@@ -58,6 +80,15 @@ export function NowPlayingBar({ onExpand, panel, onPanelChange }: NowPlayingBarP
             <NextIcon />
           </button>
         </div>
+        <button
+          type="button"
+          className={`fz-icon-btn ${repeat !== 'off' ? 'is-on' : ''}`}
+          aria-label={`Repeat: ${repeat}`}
+          onClick={actions.cycleRepeat}
+          disabled={!current}
+        >
+          {repeat === 'one' ? <RepeatOneIcon /> : <RepeatIcon />}
+        </button>
       </div>
 
       <div
@@ -113,7 +144,7 @@ export function NowPlayingBar({ onExpand, panel, onPanelChange }: NowPlayingBarP
 
       <div className="fz-bar__right">
         {current && (
-          <>
+          <div className="fz-bar__group">
             <button
               type="button"
               className={`fz-icon-btn ${starred ? 'is-on' : ''}`}
@@ -121,23 +152,6 @@ export function NowPlayingBar({ onExpand, panel, onPanelChange }: NowPlayingBarP
               onClick={() => void toggleStar('song', current.id)}
             >
               <HeartIcon filled={starred} />
-            </button>
-            <button
-              type="button"
-              className={`fz-icon-btn ${shuffle ? 'is-on' : ''}`}
-              aria-label="Shuffle"
-              aria-pressed={shuffle}
-              onClick={actions.toggleShuffle}
-            >
-              <ShuffleIcon />
-            </button>
-            <button
-              type="button"
-              className={`fz-icon-btn ${repeat !== 'off' ? 'is-on' : ''}`}
-              aria-label={`Repeat: ${repeat}`}
-              onClick={actions.cycleRepeat}
-            >
-              {repeat === 'one' ? <RepeatOneIcon /> : <RepeatIcon />}
             </button>
             <button
               type="button"
@@ -168,18 +182,20 @@ export function NowPlayingBar({ onExpand, panel, onPanelChange }: NowPlayingBarP
             >
               <EllipsisIcon />
             </button>
-          </>
+          </div>
         )}
-        <div className="fz-volume">
+        <div className="fz-bar__group fz-volume">
           <button type="button" className="fz-icon-btn" aria-label={muted ? 'Unmute' : 'Mute'} onClick={actions.toggleMute}>
             <VolumeIcon />
           </button>
           <Scrubber value={muted ? 0 : volume} max={1} onChange={actions.setVolume} ariaLabel="Volume" />
         </div>
         {current && (
-          <button type="button" className="fz-icon-btn" aria-label="Open full screen player" onClick={onExpand}>
-            <ChevronDownIcon style={{ transform: 'rotate(180deg)' }} />
-          </button>
+          <div className="fz-bar__group">
+            <button type="button" className="fz-icon-btn" aria-label="Open full screen player" onClick={onExpand}>
+              <ChevronDownIcon style={{ transform: 'rotate(180deg)' }} />
+            </button>
+          </div>
         )}
       </div>
       {menu}

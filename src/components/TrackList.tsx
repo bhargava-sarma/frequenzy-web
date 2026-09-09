@@ -3,8 +3,8 @@
  *
  * It adapts to the device rather than pretending they are the same: on desktop
  * rows reveal actions on hover and support click/shift/cmd selection with a
- * batch toolbar; on touch they are swiped sideways for Play Next and Favourite,
- * and long-pressed for the full menu.
+ * batch toolbar; on touch they are swiped left to play next, right to add to
+ * the queue, and long-pressed for the full menu.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
@@ -13,8 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { Artwork } from './Artwork';
 import { useContextMenu } from './ContextMenu';
 import {
-  CheckIcon, CloseIcon, EllipsisIcon, GripIcon, HeartIcon, PlayIcon, PlusIcon,
-  QueueIcon, TrashIcon,
+  AddToQueueIcon, CheckIcon, CloseIcon, EllipsisIcon, GripIcon, HeartIcon, PlayIcon,
+  PlayNextIcon, PlusIcon, TrashIcon,
 } from './Icons';
 import { SwipeableRow, type SwipeAction } from './SwipeableRow';
 import { formatTime, qualityBadge, songArtist } from '../lib/format';
@@ -201,20 +201,23 @@ export function TrackList({
             );
           }
 
+          // Swipe left plays the song next; swipe right adds it to the end of
+          // the queue. The first action in each drawer is what a full swipe
+          // commits, so those two must lead.
           const leftActions: SwipeAction[] = [
             {
               id: 'next',
               label: 'Play Next',
               tone: 'next',
-              icon: <QueueIcon />,
+              icon: <PlayNextIcon />,
               onSelect: () => actions.playNext([song]),
             },
             {
-              id: 'last',
-              label: 'Play Last',
-              tone: 'last',
-              icon: <PlusIcon />,
-              onSelect: () => actions.playLater([song]),
+              id: 'love',
+              label: starred ? 'Unfavourite' : 'Favourite',
+              tone: 'love',
+              icon: <HeartIcon filled={starred} />,
+              onSelect: () => void toggleStar('song', song.id),
             },
           ];
           if (onRemove) {
@@ -229,11 +232,11 @@ export function TrackList({
 
           const rightActions: SwipeAction[] = [
             {
-              id: 'love',
-              label: starred ? 'Unfavourite' : 'Favourite',
-              tone: 'love',
-              icon: <HeartIcon filled={starred} />,
-              onSelect: () => void toggleStar('song', song.id),
+              id: 'queue',
+              label: 'Add to Queue',
+              tone: 'last',
+              icon: <AddToQueueIcon />,
+              onSelect: () => actions.playLater([song]),
             },
             {
               id: 'playlist',
@@ -469,10 +472,10 @@ function SelectionBar({
           <PlayIcon /> Play
         </button>
         <button type="button" className="fz-btn" onClick={() => actions.playNext(songs)}>
-          <QueueIcon /> Play Next
+          <PlayNextIcon /> Play Next
         </button>
         <button type="button" className="fz-btn" onClick={() => actions.playLater(songs)}>
-          <PlusIcon /> Play Last
+          <AddToQueueIcon /> Add to Queue
         </button>
         <button type="button" className="fz-btn" onClick={() => addToPlaylist(songs)}>
           <PlusIcon /> Add to Playlist

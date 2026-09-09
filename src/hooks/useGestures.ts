@@ -67,7 +67,7 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  const start = useRef({ x: 0, y: 0, time: 0, base: 0 });
+  const start = useRef({ x: 0, y: 0, time: 0, base: 0, travel: 0, rowWidth: 0 });
   const axis = useRef<'undecided' | 'horizontal' | 'vertical'>('undecided');
   const swiped = useRef(false);
 
@@ -78,13 +78,20 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
   }, [dragging, leftWidth, open, rightWidth]);
 
   const settle = useCallback(
-    (next: number, velocity: number) => {
+    (next: number, velocity: number, travel: number, rowWidth: number) => {
       const width = next < 0 ? leftWidth : rightWidth;
-      const fullThreshold = Math.max(120, width * 2.2);
+      /*
+       * Measured against how far the finger actually went, not against the
+       * offset. Past the drawer the row rubberbands at roughly a third speed,
+       * so a threshold expressed in offset pixels wanted about 720px of travel
+       * on a 390px-wide phone: the full swipe could never fire at all. This is
+       * a real distance, and capped so it stays reachable on any row.
+       */
+      const fullThreshold = Math.min(rowWidth * 0.68, Math.max(150, width + 110));
       const flick = Math.abs(velocity) > 0.5;
 
       if (next < 0 && leftWidth > 0) {
-        if (Math.abs(next) > fullThreshold && onFullSwipeLeft) {
+        if (Math.abs(travel) > fullThreshold && onFullSwipeLeft) {
           onFullSwipeLeft();
           onOpenChange?.(null);
           setOffset(0);
@@ -97,7 +104,7 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
       }
 
       if (next > 0 && rightWidth > 0) {
-        if (next > fullThreshold && onFullSwipeRight) {
+        if (travel > fullThreshold && onFullSwipeRight) {
           onFullSwipeRight();
           onOpenChange?.(null);
           setOffset(0);
@@ -118,7 +125,14 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       if (disabled || event.pointerType === 'mouse') return;
-      start.current = { x: event.clientX, y: event.clientY, time: performance.now(), base: offset };
+      start.current = {
+        x: event.clientX,
+        y: event.clientY,
+        time: performance.now(),
+        base: offset,
+        travel: 0,
+        rowWidth: event.currentTarget.offsetWidth,
+      };
       axis.current = 'undecided';
       swiped.current = false;
     },
@@ -143,6 +157,7 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
       if (axis.current !== 'horizontal') return;
 
       swiped.current = true;
+      start.current.travel = dx;
       const raw = start.current.base + dx;
       // Only allow directions that actually have actions behind them.
       const limited =
@@ -164,6 +179,7 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
       const wasHorizontal = axis.current === 'horizontal';
       const elapsed = Math.max(1, performance.now() - start.current.time);
       const velocity = (event.clientX - start.current.x) / elapsed;
+      const { travel, rowWidth } = start.current;
       start.current.time = 0;
       axis.current = 'undecided';
       if (!wasHorizontal) return;
@@ -171,7 +187,7 @@ export function useSwipeActions(options: SwipeActionsOptions = {}): SwipeActions
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
-      settle(offset, velocity);
+      settle(offset, velocity, travel, rowWidth);
     },
     [offset, settle],
   );
