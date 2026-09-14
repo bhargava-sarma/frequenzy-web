@@ -53,7 +53,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
         <div className="fz-ambient__scrim" />
       </div>
 
-      <form className="fz-login__panel fz-pane" onSubmit={submit}>
+      <form className="fz-login__panel fz-mat fz-mat--thick fz-mat--lens-soft fz-mat--e4" onSubmit={submit}>
   
         <div className="fz-login__brand">
           <img src="/icons/icon.svg" alt="" />

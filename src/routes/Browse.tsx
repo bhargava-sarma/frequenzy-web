@@ -1,17 +1,17 @@
 /** Browse the whole library by release, decade and genre. */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { AlbumCard, CardSkeleton, Shelf } from '../components/Cards';
 import { Page } from '../components/Page';
 import { getAlbumList, getGenres } from '../lib/subsonic';
 import { useAsync } from '../hooks/useAsync';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960];
 
 export function Browse({ onMenuClick }: { onMenuClick?: () => void }) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const [decade, setDecade] = useState<number | null>(null);
 
   const newest = useAsync((signal) => getAlbumList('newest', { size: 24 }, signal), []);

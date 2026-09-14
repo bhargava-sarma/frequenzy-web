@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 
 import { Artwork } from './Artwork';
 import { useContextMenu } from './ContextMenu';
@@ -25,6 +25,7 @@ import { useMediaMenu } from '../hooks/useMediaMenu';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { usePlayer, type PlaybackContextInfo } from '../state/player';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 interface TrackListProps {
   songs: Song[];
@@ -55,7 +56,7 @@ export function TrackList({
   const { addToPlaylist, showTrackInfo } = useDialogs();
   const { songMenu } = useMediaMenu();
   const { open, openAt, openAtPoint, menu } = useContextMenu();
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const compact = useIsCompact();
   const touch = useIsTouch();
 
@@ -462,8 +463,18 @@ function SelectionBar({
 
   const allStarred = songs.every((song) => isStarred('song', song.id));
 
-  return (
-    <div className="fz-selection-bar fz-pane">
+  /*
+   * Rendered into the body rather than into the list.
+   *
+   * `position: fixed` is only fixed to the viewport while no ancestor carries a
+   * transform, a filter or paint containment — and this bar lives inside a page
+   * that has all three at various moments: a spring entrance, a scroll-driven
+   * reveal, and `content-visibility` on every section. Any one of them turns
+   * the bar into an absolutely-positioned element halfway up the track list.
+   * A portal is the only version of this that cannot be broken from above.
+   */
+  return createPortal(
+    <div className="fz-selection-bar fz-mat fz-mat--thick fz-mat--lens fz-mat--e4">
       <div className="fz-selection-bar__count">
         {songs.length} selected
       </div>
@@ -504,6 +515,7 @@ function SelectionBar({
       <button type="button" className="fz-icon-btn" aria-label="Clear selection" onClick={onClear}>
         <CloseIcon />
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 }

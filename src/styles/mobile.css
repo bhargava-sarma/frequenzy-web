@@ -95,7 +95,7 @@
   height: var(--miniplayer-height);
   padding: 0 6px 0 7px;
   border-radius: var(--radius-pill);
-  /* See the note on .fz-bar: isolating a capsule kills its own backdrop. */
+  /* See the note on .fz-bar about the rim pseudo-element's stacking. */
   /* The bar owns both axes: sideways skips tracks, upward opens the player. */
   touch-action: none;
   -webkit-tap-highlight-color: transparent;

@@ -1,13 +1,296 @@
 /*
- * The ambient wash used by the full-screen player.
+ * The material.
  *
- * The general-purpose glass that used to live here has been replaced by
- * `.fz-pane` in material.css, which layers blur, tint, frost, sheen and rim in
- * one place. What remains is the artwork-coloured light for the player.
+ * One scale, the way SwiftUI has one, from the barely-there film over a button
+ * to the thick wall of the sidebar. A surface picks the step that matches how
+ * far it needs to stand off from what is behind it, and gets the same five
+ * layers at every step:
+ *
+ *   1. the backdrop, blurred and saturated — and, on the top tiers, refracted
+ *   2. a tint, which in dark mode is *lighter* than what is behind it, because
+ *      a raised pane catches light; tinting it down makes every card read as a
+ *      hole cut in the page
+ *   3. a specular pool that follows the pointer
+ *   4. grain, so a wide gradient cannot band
+ *   5. a rim that is bright where the light lands and fades to nothing opposite
+ *
+ * Drop any one of them and the surface stops reading as glass and starts
+ * reading as a rounded rectangle with a blur filter on it.
+ *
+ * Both pseudo-elements sit at `z-index: -1`, which in paint order is *above*
+ * the element's own background but *below* its in-flow children — so a surface
+ * gets all five layers without any component having to position its contents.
  */
 
-/* ------------------------------------------------------- ambient art backdrop */
+/* --------------------------------------------------------------- the scale */
 
+.fz-mat {
+  position: relative;
+  /* Gives the negative-z pseudo-elements a stacking context to sit in. It does
+     not affect this element's own backdrop-filter. */
+  isolation: isolate;
+  --mat-blur: var(--mat-blur-regular);
+  --mat-tint: var(--mat-tint-regular);
+  background-color: var(--mat-tint);
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+}
+
+:where(.fz-mat) {
+  border-radius: var(--radius-lg);
+}
+
+.fz-mat--ultra { --mat-blur: var(--mat-blur-ultra); --mat-tint: var(--mat-tint-ultra); }
+.fz-mat--thin { --mat-blur: var(--mat-blur-thin); --mat-tint: var(--mat-tint-thin); }
+.fz-mat--regular { --mat-blur: var(--mat-blur-regular); --mat-tint: var(--mat-tint-regular); }
+.fz-mat--thick { --mat-blur: var(--mat-blur-thick); --mat-tint: var(--mat-tint-thick); }
+.fz-mat--chrome { --mat-blur: var(--mat-blur-chrome); --mat-tint: var(--mat-tint-chrome); }
+
+/* ------------------------------------------------------- sheen, spec, grain */
+
+.fz-mat::before,
+.fz-pane::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image:
+    /* The pool of light under the pointer. */
+    radial-gradient(
+      farthest-side circle at var(--mx) var(--my),
+      rgba(255, 255, 255, var(--spec-strength)),
+      rgba(255, 255, 255, 0) 100%
+    ),
+    /* The permanent sheen along the lit edge. */
+    linear-gradient(
+      168deg,
+      rgba(255, 255, 255, 0.13) 0%,
+      rgba(255, 255, 255, 0.035) 24%,
+      rgba(255, 255, 255, 0) 52%
+    ),
+    url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22130%22%20height%3D%22130%22%3E%3Cfilter%20id%3D%22n%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.85%22%20numOctaves%3D%223%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22130%22%20height%3D%22130%22%20filter%3D%22url%28%23n%29%22%20opacity%3D%220.055%22%2F%3E%3C%2Fsvg%3E");
+  background-size: auto, auto, 130px 130px;
+  background-blend-mode: normal, normal, soft-light;
+}
+
+/* ------------------------------------------------------------------- the rim */
+
+/*
+ * Painted as a masked border rather than a `border`, so it can be a gradient:
+ * a real bevel is brightest where the light hits it and dark where it turns
+ * away, and one flat hairline all the way round looks drawn on.
+ */
+.fz-mat::after,
+.fz-pane::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    var(--rim-angle),
+    var(--rim-light),
+    var(--rim-mid) 28%,
+    rgba(255, 255, 255, 0) 54%,
+    var(--rim-dark)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* ---------------------------------------------------------------- the lens */
+
+/*
+ * Refraction. `backdrop-filter` takes `url()`, so a surface can displace what
+ * is behind it as well as blur it — the rim sweeps the background inward the
+ * way the thick edge of a real lens does, which is the thing that separates
+ * Liquid Glass from a rounded rectangle with a blur on it.
+ *
+ * It is also the most expensive thing the app does per frame, so it is opt-in
+ * and the performance tier takes it away first.
+ */
+.fz-mat--lens {
+  backdrop-filter:
+    blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness))
+    url(#fz-lens);
+  -webkit-backdrop-filter:
+    blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness))
+    url(#fz-lens);
+}
+
+/* Large panels need a proportionally narrower edge band, or the lens stops
+   being a rim and becomes the whole surface. */
+.fz-mat--lens-soft {
+  backdrop-filter:
+    blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness))
+    url(#fz-lens-soft);
+  -webkit-backdrop-filter:
+    blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness))
+    url(#fz-lens-soft);
+}
+
+:root[data-perf='medium'] .fz-mat--lens,
+:root[data-perf='medium'] .fz-mat--lens-soft,
+:root[data-perf='low'] .fz-mat--lens,
+:root[data-perf='low'] .fz-mat--lens-soft,
+:root[data-glass='off'] .fz-mat--lens,
+:root[data-glass='off'] .fz-mat--lens-soft {
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+}
+
+/* ------------------------------------------------------------------- tinted */
+
+/*
+ * Glass that takes its colour from the record. A flat white film is honest but
+ * inert; a film carrying a breath of the artwork is what makes the interface
+ * look like it belongs to whatever is playing.
+ */
+.fz-mat--tint,
+.fz-pane--tint {
+  background-image: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--art-vibrant) 18%, transparent),
+    color-mix(in oklab, var(--art-dark-vibrant) 10%, transparent) 58%,
+    transparent
+  );
+}
+
+@supports not (color: color-mix(in oklab, red, blue)) {
+  .fz-mat--tint,
+  .fz-pane--tint {
+    background-image: linear-gradient(150deg, rgba(255, 255, 255, 0.05), transparent 58%);
+  }
+}
+
+/* ---------------------------------------------------------------- elevation */
+
+.fz-mat--e1 { box-shadow: var(--elev-1), var(--edge-top); }
+.fz-mat--e2 { box-shadow: var(--elev-2), var(--edge-top); }
+.fz-mat--e3 { box-shadow: var(--elev-3), var(--edge-top); }
+.fz-mat--e4 { box-shadow: var(--elev-4), var(--edge-top); }
+
+/* --------------------------------------------------------------- behaviour */
+
+/*
+ * Raised, tappable glass. `--lift` is a registered custom property, so one
+ * hover drives the translation, the shadow and the sheen off a single
+ * interpolated number rather than three transitions that can drift apart.
+ */
+.fz-mat--interactive,
+.fz-pane--interactive {
+  --lift: 0;
+  transition:
+    --lift var(--dur-slow) var(--spring-smooth),
+    transform var(--dur-slow) var(--spring-smooth),
+    box-shadow var(--dur-slow) var(--ease-out);
+  transform: translate3d(0, calc(var(--lift) * -3px), 0);
+}
+
+.fz-mat--interactive:hover,
+.fz-mat--interactive:focus-visible,
+.fz-pane--interactive:hover,
+.fz-pane--interactive:focus-visible {
+  --lift: 1;
+  box-shadow: var(--elev-3), var(--edge-top);
+}
+
+.fz-mat--interactive:active,
+.fz-pane--interactive:active {
+  transform: translate3d(0, 0, 0) scale(0.988);
+  transition-duration: var(--dur-instant);
+}
+
+/* ------------------------------------------------------ the old pane, aliased */
+
+/*
+ * `.fz-pane` is what most of the app already asks for: the regular step of the
+ * scale, with elevation. Keeping the name means every existing surface picks up
+ * the new material without being rewritten.
+ */
+.fz-pane {
+  position: relative;
+  isolation: isolate;
+  --mat-blur: var(--mat-blur-regular);
+  --mat-tint: var(--mat-tint-regular);
+  background-color: var(--mat-tint);
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+  box-shadow: var(--elev-2), var(--edge-top);
+}
+
+:where(.fz-pane) {
+  border-radius: var(--radius-lg);
+}
+
+/* ------------------------------------------------------------- degradation */
+
+/*
+ * Honest fallbacks. Where the blur cannot happen the surface becomes properly
+ * opaque rather than a muddy translucent one — a half-working effect reads as
+ * broken in a way that no effect at all does not.
+ */
+:root[data-glass='off'] .fz-mat,
+:root[data-glass='off'] .fz-pane {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background-color: var(--bg-elevated);
+}
+
+:root[data-glass='off'] .fz-mat::before,
+:root[data-glass='off'] .fz-pane::before {
+  background-image: none;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fz-mat,
+  .fz-pane {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: var(--bg-elevated);
+  }
+}
+
+/*
+ * On the low tier the blur radius is already zero, so the filter is pure cost
+ * for no picture — and dropping it also drops the composited layer it forces.
+ */
+:root[data-perf='low'] .fz-mat,
+:root[data-perf='low'] .fz-pane {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Keep the sheen, drop the grain: a 130px tile resampled under every surface is
+   the layer nobody will miss. */
+:root[data-perf='low'] .fz-mat::before,
+:root[data-perf='low'] .fz-pane::before {
+  background-image:
+    radial-gradient(
+      farthest-side circle at var(--mx) var(--my),
+      rgba(255, 255, 255, var(--spec-strength)),
+      rgba(255, 255, 255, 0) 100%
+    ),
+    linear-gradient(168deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 52%);
+}
+
+/* --------------------------------------------- the player's artwork ambience */
+
+/*
+ * The full-screen player does not sit on the app's backdrop; it builds its own
+ * out of the cover playing right now. Three screen-blended blobs, drifting
+ * slowly enough that you never catch them moving.
+ */
 .fz-ambient {
   position: absolute;
   inset: 0;
@@ -17,12 +300,21 @@
   background: var(--art-background);
 }
 
+/*
+ * No `filter: blur()` here, deliberately.
+ *
+ * These are radial gradients with a soft falloff — they are already perfectly
+ * smooth, and convolving a smooth gradient produces a picture indistinguishable
+ * from the original at a cost proportional to its area. At 72vmax that is the
+ * single most expensive thing on the screen, paid every frame, for nothing.
+ * Saturation is kept because it does change the colour.
+ */
 .fz-ambient__blob {
   position: absolute;
-  width: 78vmax;
-  height: 78vmax;
+  width: 72vmax;
+  height: 72vmax;
   border-radius: 50%;
-  filter: blur(90px) saturate(140%);
+  filter: saturate(140%);
   opacity: 0.36;
   will-change: transform;
   mix-blend-mode: screen;
@@ -31,8 +323,8 @@
 /*
  * Scrim over the blobs. Three screen-blended gradients would otherwise stack
  * into a bright wash that swallows both the artwork and the white text; this
- * pushes the edges and the lower half back down into shadow, which is what
- * makes the cover read as the lit object in the room.
+ * pushes the edges and the lower half back into shadow, which is what makes
+ * the cover read as the lit object in the room.
  */
 .fz-ambient__scrim {
   position: absolute;
@@ -43,34 +335,56 @@
     linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, transparent 26%, rgba(0, 0, 0, 0.34) 78%, rgba(0, 0, 0, 0.6) 100%);
 }
 
-.fz-ambient__blob:nth-child(1) {
-  background: radial-gradient(circle at 30% 30%, var(--art-primary), transparent 66%);
+.fz-ambient__blob--a {
+  background: radial-gradient(circle at 30% 30%, var(--art-primary) 0%, color-mix(in oklab, var(--art-primary) 62%, transparent) 30%, color-mix(in oklab, var(--art-primary) 26%, transparent) 52%, color-mix(in oklab, var(--art-primary) 7%, transparent) 72%, transparent 90%);
   top: -30%;
   left: -22%;
   animation: fz-drift-a 26s var(--ease-in-out) infinite alternate;
 }
 
-.fz-ambient__blob:nth-child(2) {
-  background: radial-gradient(circle at 70% 40%, var(--art-secondary), transparent 66%);
+.fz-ambient__blob--b {
+  background: radial-gradient(circle at 70% 40%, var(--art-secondary) 0%, color-mix(in oklab, var(--art-secondary) 62%, transparent) 30%, color-mix(in oklab, var(--art-secondary) 26%, transparent) 52%, color-mix(in oklab, var(--art-secondary) 7%, transparent) 72%, transparent 90%);
   bottom: -34%;
   right: -20%;
   animation: fz-drift-b 32s var(--ease-in-out) infinite alternate;
 }
 
-.fz-ambient__blob:nth-child(3) {
-  background: radial-gradient(circle at 50% 60%, var(--art-tertiary), transparent 66%);
+.fz-ambient__blob--c {
+  background: radial-gradient(circle at 50% 60%, var(--art-tertiary) 0%, color-mix(in oklab, var(--art-tertiary) 62%, transparent) 30%, color-mix(in oklab, var(--art-tertiary) 26%, transparent) 52%, color-mix(in oklab, var(--art-tertiary) 7%, transparent) 72%, transparent 90%);
   top: 18%;
   right: -12%;
   animation: fz-drift-c 38s var(--ease-in-out) infinite alternate;
 }
 
-/* A whisper of film grain keeps the big gradients from banding. */
+/* A phone has neither the fill rate nor the screen area for three of these. */
+:root[data-perf='medium'] .fz-ambient__blob--c,
+:root[data-perf='low'] .fz-ambient__blob--b,
+:root[data-perf='low'] .fz-ambient__blob--c {
+  display: none;
+}
+
+:root[data-perf='low'] .fz-ambient__blob {
+  animation: none;
+}
+
+/*
+ * Grain as a tiled image rather than a live `filter: url(#fz-grain)`.
+ *
+ * An SVG turbulence filter stretched over the whole viewport is re-evaluated
+ * whenever anything beneath it changes; the identical picture as a background
+ * image is rasterised once and then just composited.
+ */
 .fz-ambient__grain {
   position: absolute;
-  inset: -50%;
+  inset: 0;
   opacity: 0.045;
-  filter: url(#fz-grain);
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22160%22%20height%3D%22160%22%3E%3Cfilter%20id%3D%22n%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.8%22%20numOctaves%3D%223%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22160%22%20height%3D%22160%22%20filter%3D%22url%28%23n%29%22%2F%3E%3C%2Fsvg%3E");
+  background-size: 160px 160px;
   pointer-events: none;
+}
+
+:root[data-perf='low'] .fz-ambient__grain {
+  display: none;
 }
 
 @keyframes fz-drift-a {
@@ -86,4 +400,10 @@
 @keyframes fz-drift-c {
   from { transform: translate3d(0, 0, 0) scale(0.94); }
   to { transform: translate3d(-10vw, 14vh, 0) scale(1.18); }
+}
+
+@supports not (color: color-mix(in oklab, red, blue)) {
+  .fz-ambient__blob--a { background: radial-gradient(circle at 30% 30%, var(--art-primary), transparent 70%); }
+  .fz-ambient__blob--b { background: radial-gradient(circle at 70% 40%, var(--art-secondary), transparent 70%); }
+  .fz-ambient__blob--c { background: radial-gradient(circle at 50% 60%, var(--art-tertiary), transparent 70%); }
 }

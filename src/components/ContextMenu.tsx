@@ -80,7 +80,7 @@ export function ContextMenu({ x, y, entries, onClose }: ContextMenuProps) {
   return createPortal(
     <div
       ref={ref}
-      className="fz-menu fz-pane"
+      className="fz-menu fz-mat fz-mat--thick fz-mat--lens fz-mat--e3"
       style={{ left: pos.left, top: pos.top, ['--origin' as string]: pos.origin }}
       role="menu"
     >

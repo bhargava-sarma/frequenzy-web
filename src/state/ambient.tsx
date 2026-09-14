@@ -2,11 +2,15 @@
  * The colour the whole app is standing in.
  *
  * A pane of glass is only convincing when there is something behind it to
- * refract. The app used to be flat black everywhere, so every "glass" surface
- * sampled black and read as a plain dark panel. This lifts the palette out of
- * the now-playing artwork once and publishes it as CSS variables on the root,
- * so the backdrop, the sidebar, the bars and the full-screen player are all
- * lit by the same source.
+ * refract, and Apple Music's signature is that the something is the record you
+ * are playing. This lifts the palette out of the now-playing artwork and
+ * publishes it on the root element, so the backdrop, the sidebar, the bars, the
+ * cards and the full-screen player are all lit by one source.
+ *
+ * The variables are registered with `@property` in tokens.css, which is what
+ * lets them *transition*: without that a track change would snap the entire
+ * interface to a new colour in one frame. With it, the room changes colour over
+ * a second and a half and you barely notice it happening.
  */
 
 import {
@@ -26,6 +30,23 @@ interface AmbientValue {
 
 const AmbientContext = createContext<AmbientValue>({ palette: DEFAULT_PALETTE, active: false });
 
+/** Every palette role, as the CSS variable that carries it. */
+const VARIABLES: Array<[string, keyof Palette]> = [
+  ['--art-primary', 'primary'],
+  ['--art-secondary', 'secondary'],
+  ['--art-tertiary', 'tertiary'],
+  ['--art-background', 'background'],
+  ['--art-vibrant', 'vibrant'],
+  ['--art-light-vibrant', 'lightVibrant'],
+  ['--art-dark-vibrant', 'darkVibrant'],
+  ['--art-muted', 'muted'],
+  ['--art-dark-muted', 'darkMuted'],
+  ['--art-accent', 'accent'],
+  ['--art-on-accent', 'onAccent'],
+  ['--art-glow', 'glow'],
+  ['--art-foreground', 'foreground'],
+];
+
 export function AmbientProvider({ children }: { children: ReactNode }) {
   const { current } = usePlayer();
   const { settings } = useSettings();
@@ -39,7 +60,7 @@ export function AmbientProvider({ children }: { children: ReactNode }) {
       return;
     }
     let alive = true;
-    extractPalette(coverArtUrl(current.coverArt, 300)).then((result) => {
+    void extractPalette(coverArtUrl(current.coverArt, 300)).then((result) => {
       if (!alive) return;
       setPalette(result);
       setActive(true);
@@ -53,11 +74,13 @@ export function AmbientProvider({ children }: { children: ReactNode }) {
   // component — can tint itself without prop drilling.
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty('--art-primary', palette.primary);
-    root.style.setProperty('--art-secondary', palette.secondary);
-    root.style.setProperty('--art-tertiary', palette.tertiary);
-    root.style.setProperty('--art-background', palette.background);
+    for (const [variable, role] of VARIABLES) {
+      root.style.setProperty(variable, String(palette[role]));
+    }
     root.dataset.ambient = active ? 'on' : 'off';
+    // Whether the cover is bright enough that the room has to stay dark to
+    // keep white text legible over it.
+    root.dataset.artLuma = palette.isLight ? 'light' : 'dark';
   }, [active, palette]);
 
   const value = useMemo(() => ({ palette, active }), [active, palette]);

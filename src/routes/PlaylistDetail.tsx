@@ -12,6 +12,8 @@ import { EllipsisIcon, PlayIcon, ShuffleIcon } from '../components/Icons';
 import { formatCount, formatDurationLong } from '../lib/format';
 import { getPlaylist, updatePlaylist } from '../lib/subsonic';
 import { useAsync } from '../hooks/useAsync';
+import { usePalette } from '../hooks/usePalette';
+import { MORPH_NAME } from '../hooks/useSmoothNavigate';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import type { Song } from '../lib/types';
@@ -30,6 +32,7 @@ export function PlaylistDetail() {
   // Re-fetch when the playlist list changes, so edits show up straight away.
   const version = playlists.find((p) => p.id === playlistId)?.changed ?? '';
   const playlist = useAsync((signal) => getPlaylist(playlistId, signal), [playlistId, version]);
+  const { palette } = usePalette(playlist.data?.coverArt, true);
 
   // Reordering is optimistic: the server call replaces the whole track list, so
   // the UI must not wait for a round trip to look right.
@@ -80,8 +83,25 @@ export function PlaylistDetail() {
 
   return (
     <Page title={name} showTitle={false}>
-      <div className="fz-detail-head">
-        <Artwork coverArt={playlist.data?.coverArt} name={name} size={600} className="fz-detail-head__art" />
+      <div
+        className="fz-detail-wash"
+        aria-hidden="true"
+        style={{
+          ['--card-glow' as string]: palette.vibrant,
+          ['--card-deep' as string]: palette.darkVibrant,
+        }}
+      />
+      {/* The header borrows this record's accent rather than the app's, so the
+          artist link stays legible against the wash above — and stays this
+          album's colour even while something else is playing. */}
+      <div className="fz-detail-head" style={{ ['--art-accent' as string]: palette.accent }}>
+        <Artwork
+          coverArt={playlist.data?.coverArt}
+          name={name}
+          size={600}
+          className="fz-detail-head__art"
+          morphName={MORPH_NAME}
+        />
         <div className="fz-detail-head__info">
           <h1 className="fz-detail-head__title">{name}</h1>
           <button

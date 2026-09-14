@@ -22,14 +22,10 @@
   padding: 0 9px;
   border-radius: var(--radius-pill);
   z-index: 40;
-  /*
-   * Deliberately NOT `isolation: isolate`. Isolation makes an element its own
-   * backdrop root, and an element that is its own backdrop root has nothing
-   * behind it to filter — the blur silently samples an empty canvas and the
-   * glass turns into flat plastic. `position` + `z-index` already scope the rim
-   * pseudo-element, which is all the isolation was ever for.
-   */
   position: relative;
+  /* `position` + `z-index` already scope the rim pseudo-element. Isolation is
+     harmless here (it does not affect the element's own backdrop-filter) but it
+     buys nothing either, so it stays off. */
 }
 
 .fz-bar__left,
@@ -323,21 +319,30 @@
   flex-direction: column;
   overflow: hidden;
   color: #fff;
-  animation: fz-player-in var(--dur-sheet) var(--ease-out);
+  animation: fz-player-in var(--dur-sheet) var(--spring-smooth);
 }
 
 .fz-player.is-closing {
   animation: fz-player-out 400ms var(--ease-in-out) forwards;
 }
 
+/*
+ * The sheet slides; it deliberately does not fade.
+ *
+ * Animating `opacity` on this element means compositing the *entire* player —
+ * three blurred gradient blobs, a grain layer, an 800px cover and a
+ * backdrop-filtered dock — into an offscreen buffer for every frame of the
+ * entrance. Moving it is nearly free by comparison, and the difference is
+ * visible on anything short of a fast GPU.
+ */
 @keyframes fz-player-in {
-  from { opacity: 0; transform: translateY(100%); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(100%); }
+  to { transform: none; }
 }
 
 @keyframes fz-player-out {
-  from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translateY(100%); }
+  from { transform: none; }
+  to { transform: translateY(100%); }
 }
 
 .fz-player__chrome {
@@ -421,10 +426,8 @@
 /* Artwork lifts and settles when playback starts, the way a record drops. */
 .fz-player__art {
   width: 100%;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--artwork-shadow-lg);
-  transition: transform var(--dur-sheet) var(--ease-spring), box-shadow var(--dur-sheet) var(--ease-out);
-  transform: scale(0.86);
 }
 
 .fz-player__art.is-playing {

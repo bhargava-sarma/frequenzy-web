@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import { App } from './App';
+import { startPerfMonitor } from './lib/perf';
 import { SettingsProvider } from './state/settings';
 import './styles/index.css';
 
@@ -18,6 +19,10 @@ createRoot(container).render(
     </SettingsProvider>
   </StrictMode>,
 );
+
+// Decide how much of the show this device can put on, then keep watching the
+// frame clock and turn it down if it cannot keep up.
+startPerfMonitor();
 
 // Fade out the splash once React has painted something.
 requestAnimationFrame(() => {

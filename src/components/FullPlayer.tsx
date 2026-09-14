@@ -12,7 +12,6 @@
  */
 
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { Artwork } from './Artwork';
 import { LyricsView } from './LyricsView';
@@ -32,6 +31,7 @@ import { useAmbient } from '../state/ambient';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { usePlayer } from '../state/player';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 export type PlayerPanel = 'none' | 'lyrics' | 'queue';
 
@@ -50,7 +50,7 @@ export function FullPlayer({ panel, onPanelChange, onClose }: FullPlayerProps) {
   const { addToPlaylist, showTrackInfo, sleepTimerSheet } = useDialogs();
   const { songMenu } = useMediaMenu();
   const { openAt, menu } = useContextMenu();
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const compact = useIsCompact();
 
   // The palette is already extracted once for the whole app; reuse it so the
@@ -160,9 +160,9 @@ export function FullPlayer({ panel, onPanelChange, onClose }: FullPlayerProps) {
       }}
     >
       <div className="fz-ambient">
-        <div className="fz-ambient__blob" />
-        <div className="fz-ambient__blob" />
-        <div className="fz-ambient__blob" />
+        <div className="fz-ambient__blob fz-ambient__blob--a" />
+        <div className="fz-ambient__blob fz-ambient__blob--b" />
+        <div className="fz-ambient__blob fz-ambient__blob--c" />
         <div className="fz-ambient__scrim" />
         <div className="fz-ambient__grain" />
       </div>

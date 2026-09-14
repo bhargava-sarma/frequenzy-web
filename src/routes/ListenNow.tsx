@@ -1,7 +1,6 @@
 /** The home screen: recent listening, fresh additions, and things to rediscover. */
 
-import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useRef } from 'react';
 
 import { AlbumCard, ArtistCard, CardSkeleton, Shelf } from '../components/Cards';
 import { Page } from '../components/Page';
@@ -11,8 +10,11 @@ import { albumArtist } from '../lib/format';
 import { getAlbum, getAlbumList, getRandomSongs, getStarred } from '../lib/subsonic';
 import { useAsync, type AsyncState } from '../hooks/useAsync';
 import { useGlassPointer } from '../hooks/useGlassPointer';
+import { usePalette } from '../hooks/usePalette';
+import { morphFrom } from '../hooks/useSmoothNavigate';
 import type { Album } from '../lib/types';
 import { usePlayer } from '../state/player';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -23,9 +25,10 @@ function greeting(): string {
 }
 
 export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const { actions } = usePlayer();
   const glass = useGlassPointer<HTMLDivElement>();
+  const heroArt = useRef<HTMLDivElement | null>(null);
 
   const recent = useAsync((signal) => getAlbumList('recent', { size: 16 }, signal), []);
   const newest = useAsync((signal) => getAlbumList('newest', { size: 16 }, signal), []);
@@ -63,51 +66,7 @@ export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
         starred.reload();
       }}
     >
-      {spotlight && (
-        <section className="fz-section">
-          <div
-            ref={glass.ref}
-            onPointerMove={glass.onPointerMove}
-            onPointerLeave={glass.onPointerLeave}
-            className="fz-hero fz-pane fz-pane--interactive fz-pane--lit"
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate(`/album/${encodeURIComponent(spotlight.id)}`)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') navigate(`/album/${encodeURIComponent(spotlight.id)}`);
-            }}
-          >
-            <Artwork coverArt={spotlight.coverArt} name={spotlight.name} size={400} className="fz-hero__art" />
-            <div className="fz-hero__text">
-              <div className="fz-hero__eyebrow">Pick up where you left off</div>
-              <div className="fz-hero__title fz-truncate">{spotlight.name}</div>
-              <div className="fz-hero__artist fz-truncate">{albumArtist(spotlight)}</div>
-            </div>
-            <div className="fz-hero__actions">
-                <button
-                  type="button"
-                  className="fz-btn fz-btn--solid"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void playSpotlight();
-                  }}
-                >
-                  <PlayIcon /> Play
-                </button>
-                <button
-                  type="button"
-                  className="fz-btn"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void shuffleEverything();
-                  }}
-                >
-                  <ShuffleIcon /> Shuffle Library
-                </button>
-            </div>
-          </div>
-        </section>
-      )}
+      {spotlight && <Spotlight album={spotlight} onPlay={playSpotlight} onShuffle={shuffleEverything} />}
 
       <AlbumShelf title="Recently Played" state={recent} onLink={() => navigate('/library/albums')} />
       <AlbumShelf title="Recently Added" state={newest} onLink={() => navigate('/library/recent')} />
@@ -136,6 +95,82 @@ export function ListenNow({ onMenuClick }: { onMenuClick?: () => void }) {
         </div>
       )}
     </Page>
+  );
+}
+
+/**
+ * "Pick up where you left off". Owns its own palette rather than borrowing the
+ * app's, because the album it is showing is usually not the one playing.
+ */
+function Spotlight({
+  album, onPlay, onShuffle,
+}: {
+  album: Album;
+  onPlay: () => Promise<void>;
+  onShuffle: () => Promise<void>;
+}) {
+  const navigate = useSmoothNavigate();
+  const glass = useGlassPointer<HTMLDivElement>();
+  const { palette, ref: paletteRef } = usePalette(album.coverArt, true);
+  const art = useRef<HTMLDivElement | null>(null);
+
+  const open = () => {
+    morphFrom(art.current);
+    navigate(`/album/${encodeURIComponent(album.id)}`);
+  };
+
+  return (
+    <section className="fz-section">
+      <div
+        ref={(node) => {
+          glass.ref.current = node;
+          paletteRef(node);
+        }}
+        onPointerMove={glass.onPointerMove}
+        onPointerLeave={glass.onPointerLeave}
+        className="fz-hero fz-pane fz-pane--interactive"
+        role="button"
+        tabIndex={0}
+        style={{
+          ['--card-glow' as string]: palette.vibrant,
+          ['--card-deep' as string]: palette.darkVibrant,
+        }}
+        onClick={open}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') open();
+        }}
+      >
+        <div className="fz-hero__wash" aria-hidden="true" />
+        <Artwork ref={art} coverArt={album.coverArt} name={album.name} size={400} className="fz-hero__art" />
+        <div className="fz-hero__text">
+          <div className="fz-hero__eyebrow">Pick up where you left off</div>
+          <div className="fz-hero__title fz-truncate">{album.name}</div>
+          <div className="fz-hero__artist fz-truncate">{albumArtist(album)}</div>
+        </div>
+        <div className="fz-hero__actions">
+          <button
+            type="button"
+            className="fz-btn fz-btn--solid"
+            onClick={(event) => {
+              event.stopPropagation();
+              void onPlay();
+            }}
+          >
+            <PlayIcon /> Play
+          </button>
+          <button
+            type="button"
+            className="fz-btn fz-btn--glass"
+            onClick={(event) => {
+              event.stopPropagation();
+              void onShuffle();
+            }}
+          >
+            <ShuffleIcon /> Shuffle Library
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

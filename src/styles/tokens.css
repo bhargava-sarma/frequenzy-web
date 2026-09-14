@@ -1,14 +1,84 @@
-/* Design tokens. Dark is the default; light mirrors every value. */
+/*
+ * Design tokens.
+ *
+ * Three ideas live here and nothing else does:
+ *
+ *   1. Colour is dynamic. The palette variables are registered with
+ *      `@property` as real `<color>` values, which is what allows them to be
+ *      *transitioned*. Without the registration a track change repaints the
+ *      entire interface in a single frame; with it, the room changes colour
+ *      over a second and a half and you never catch it happening.
+ *
+ *   2. Motion is springs. The easing curves below are sampled from an actual
+ *      damped-spring solution rather than hand-drawn beziers, so things
+ *      accelerate and settle the way objects do. A cubic-bezier can imitate the
+ *      start of that; it cannot do the settle.
+ *
+ *   3. Material is budgeted. Every blur radius is a variable, so the
+ *      performance tier can turn the whole app down in one place instead of
+ *      each surface deciding for itself.
+ *
+ * Dark is the default; light mirrors every value at the bottom.
+ */
+
+/* ---------------------------------------------- animatable custom properties */
+
+/*
+ * Registering these does two things: it makes them interpolable, and it makes
+ * them type-checked, so a malformed value from the extractor is ignored instead
+ * of cascading an invalid colour through the whole app.
+ */
+@property --art-primary { syntax: '<color>'; inherits: true; initial-value: #3f4a6b; }
+@property --art-secondary { syntax: '<color>'; inherits: true; initial-value: #4a3560; }
+@property --art-tertiary { syntax: '<color>'; inherits: true; initial-value: #2f4257; }
+@property --art-background { syntax: '<color>'; inherits: true; initial-value: #0d0d10; }
+@property --art-vibrant { syntax: '<color>'; inherits: true; initial-value: #5b6ea8; }
+@property --art-light-vibrant { syntax: '<color>'; inherits: true; initial-value: #98a7d8; }
+@property --art-dark-vibrant { syntax: '<color>'; inherits: true; initial-value: #333f68; }
+@property --art-muted { syntax: '<color>'; inherits: true; initial-value: #5a5a70; }
+@property --art-dark-muted { syntax: '<color>'; inherits: true; initial-value: #2a2a36; }
+@property --art-accent { syntax: '<color>'; inherits: true; initial-value: #8c9ede; }
+@property --art-on-accent { syntax: '<color>'; inherits: true; initial-value: #0b0b12; }
+@property --art-glow { syntax: '<color>'; inherits: true; initial-value: #7f92e0; }
+@property --art-foreground { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+
+/*
+ * Per-card colour, set by the palette hook on individual elements.
+ *
+ * These inherit. A card sets them on its root and its whole subtree reads them
+ * — the wash layer, the glow, the shadow. Declared `inherits: false` they
+ * silently fall back to the initial value in every child element, which is a
+ * particularly nasty failure because pseudo-elements inherit either way: the
+ * effect works on `::before` and is stone dead one div down.
+ */
+@property --card-glow { syntax: '<color>'; inherits: true; initial-value: #6b7bb8; }
+@property --card-deep { syntax: '<color>'; inherits: true; initial-value: #2a2a36; }
+
+/* Pointer position over a glass surface, 0-100%. Interpolating these is what
+   makes a specular highlight glide instead of teleport. */
+@property --mx { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --my { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+/* Tilt, for cards that lean toward the cursor. */
+@property --tilt-x { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@property --tilt-y { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+/* Generic 0-1 drivers, so a single hover can move several properties at once. */
+@property --lift { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --sheen { syntax: '<number>'; inherits: false; initial-value: 0; }
 
 :root {
   color-scheme: dark;
 
-  /* Apple Music's signature red. */
+  /* ------------------------------------------------------------- brand */
+
+  /* Apple Music's signature red. The app keeps it for identity; anywhere the
+     artwork is the subject, --art-accent takes over instead. */
   --accent: #fa243c;
   --accent-hover: #ff3b52;
   --accent-press: #d81b32;
   --accent-soft: rgba(250, 36, 60, 0.14);
   --accent-glow: rgba(250, 36, 60, 0.45);
+
+  /* ------------------------------------------------------------ surfaces */
 
   --bg-base: #000000;
   --bg-content: #0b0b0d;
@@ -20,83 +90,201 @@
   --text-primary: rgba(255, 255, 255, 0.94);
   --text-secondary: rgba(255, 255, 255, 0.58);
   --text-tertiary: rgba(255, 255, 255, 0.38);
+  --text-quaternary: rgba(255, 255, 255, 0.22);
   --text-on-accent: #ffffff;
 
   --separator: rgba(255, 255, 255, 0.09);
   --separator-strong: rgba(255, 255, 255, 0.16);
 
+  /* --------------------------------------------------------- the material */
+
   /*
-   * Liquid glass. In dark mode the tint is a *lighter* film, not a darker one:
-   * a raised pane catches light, so tinting it down made every card read as a
-   * hole cut in the page rather than a surface sitting above it.
+   * A scale, the way SwiftUI has one: each step is more opaque and blurs
+   * harder, and a surface picks the step that matches how much it needs to
+   * separate itself from what is behind it. Every radius is a variable so the
+   * performance tier can turn the whole app down at once.
    */
-  --glass-tint: rgba(255, 255, 255, 0.055);
-  --glass-tint-strong: rgba(18, 18, 22, 0.78);
+  --mat-blur-ultra: 10px;
+  --mat-blur-thin: 20px;
+  --mat-blur-regular: 32px;
+  --mat-blur-thick: 46px;
+  --mat-blur-chrome: 58px;
+  --mat-saturate: 200%;
+  --mat-brightness: 0.86;
+
+  /* The film of light on top of the blur. In dark mode it is *lighter* than
+     what is behind it: a raised pane catches light, and tinting it down made
+     every card read as a hole cut in the page. */
+  --mat-tint-ultra: rgba(255, 255, 255, 0.04);
+  --mat-tint-thin: rgba(255, 255, 255, 0.055);
+  --mat-tint-regular: rgba(255, 255, 255, 0.075);
+  --mat-tint-thick: rgba(30, 30, 36, 0.52);
+  --mat-tint-chrome: rgba(22, 22, 27, 0.66);
+
+  /* Legacy names, still read in a few places. */
+  --glass-tint: var(--mat-tint-thin);
+  --glass-tint-strong: var(--mat-tint-chrome);
   --glass-tint-light: rgba(58, 58, 66, 0.42);
   --glass-border: rgba(255, 255, 255, 0.13);
   --glass-border-bright: rgba(255, 255, 255, 0.26);
   --glass-specular: rgba(255, 255, 255, 0.5);
   --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
-  --glass-blur: 44px;
-  --glass-saturate: 190%;
+  --glass-blur: var(--mat-blur-thick);
+  --glass-saturate: var(--mat-saturate);
+
+  /* The rim. A real bevel is brightest where light lands and fades to nothing
+     opposite it, so this is a gradient rather than one flat hairline. */
+  --rim-light: rgba(255, 255, 255, 0.4);
+  --rim-mid: rgba(255, 255, 255, 0.07);
+  --rim-dark: rgba(255, 255, 255, 0.11);
+  --rim-angle: 152deg;
+
+  /* How strong the pointer-tracked specular pool is. */
+  --spec-strength: 0.16;
+
+  /* ----------------------------------------------------------- elevation */
+
+  /* Each level is a tight contact shadow plus a wide ambient one, so surfaces
+     feel lifted rather than outlined. */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.18);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --elev-3: 0 4px 10px rgba(0, 0, 0, 0.34), 0 18px 48px rgba(0, 0, 0, 0.4);
+  --elev-4: 0 8px 20px rgba(0, 0, 0, 0.4), 0 34px 90px rgba(0, 0, 0, 0.55);
+  --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
   --artwork-shadow: 0 10px 34px rgba(0, 0, 0, 0.46);
   --artwork-shadow-lg: 0 34px 90px rgba(0, 0, 0, 0.62);
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 22px;
+  /* -------------------------------------------------------------- shape */
+
+  /* Apple's corners have grown steadily rounder; these are sized to match
+     Music on macOS 15 rather than the tighter radii of a decade ago. */
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-3xl: 42px;
   --radius-pill: 999px;
 
-  --sidebar-width: 258px;
-  /* The floating transport capsule, and the air it needs around it. */
-  --bar-pill: 66px;
-  --bar-inset: 16px;
-  /* The grid row the capsule sits in: the pill, its margin, and a little sky. */
-  --bar-height: 88px;
-  --topbar-height: 54px;
-
-  /* Device safe areas. Zero everywhere except notched phones and PWAs. */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-
-  /* Compact shell metrics. */
-  --tabbar-height: 52px;
-  --miniplayer-height: 62px;
-  /* The gap between the floating mini player and the tab bar under it. */
-  --mini-inset: 8px;
-  /* Everything a compact page must clear at the bottom. */
-  --compact-dock: calc(
-    var(--tabbar-height) + var(--miniplayer-height) + var(--mini-inset) + var(--safe-bottom)
-  );
-  /* Apple's minimum comfortable touch target. */
-  --tap: 44px;
+  /* --------------------------------------------------------------- type */
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter',
     'Segoe UI Variable', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter',
     'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
 
-  /* Apple's standard easing curves. */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 25px;
+  --text-3xl: 32px;
+  --text-4xl: 42px;
+
+  /* Apple tightens tracking as type grows; these are the ratios SF uses. */
+  --track-tight: -0.022em;
+  --track-tighter: -0.032em;
+
+  /* ------------------------------------------------------------- layout */
+
+  --sidebar-width: 258px;
+  --bar-pill: 66px;
+  --bar-inset: 16px;
+  --bar-height: 88px;
+  --topbar-height: 54px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --tabbar-height: 52px;
+  --miniplayer-height: 62px;
+  --mini-inset: 8px;
+  --compact-dock: calc(
+    var(--tabbar-height) + var(--miniplayer-height) + var(--mini-inset) + var(--safe-bottom)
+  );
+  --tap: 44px;
+
+  /* ------------------------------------------------------------- motion */
+
+  /* snap: zeta 0.86, omega 16 — settles in ~550ms */
+  --spring-snap: linear(0, 0.0178 2.3%, 0.0636 4.5%, 0.1276 6.8%, 0.2025 9.1%, 0.2824 11.4%, 0.3633 13.6%, 0.4421 15.9%, 0.5168 18.2%, 0.5861 20.5%, 0.6491 22.7%, 0.7057 25%, 0.7557 27.3%, 0.7994 29.5%, 0.8371 31.8%, 0.8694 34.1%, 0.8966 36.4%, 0.9195 38.6%, 0.9384 40.9%, 0.9538 43.2%, 0.9664 45.5%, 0.9764 47.7%, 0.9843 50%, 0.9904 52.3%, 0.9951 54.5%, 0.9985 56.8%, 1.0011 59.1%, 1.0028 61.4%, 1.004 63.6%, 1.0046 65.9%, 1.005 68.2%, 1.005 70.5%, 1.0049 72.7%, 1.0046 75%, 1.0043 77.3%, 1.0039 79.5%, 1.0035 81.8%, 1.0031 84.1%, 1.0027 86.4%, 1.0023 88.6%, 1.002 90.9%, 1.0017 93.2%, 1.0014 95.5%, 1.0012 97.7%, 1);
+  --spring-snap-ms: 550ms;
+
+  /* smooth: zeta 0.95, omega 11 — settles in ~700ms */
+  --spring-smooth: linear(0, 0.0137 2.3%, 0.0492 4.5%, 0.0993 6.8%, 0.1587 9.1%, 0.2231 11.4%, 0.2895 13.6%, 0.3556 15.9%, 0.4197 18.2%, 0.4808 20.5%, 0.5381 22.7%, 0.5912 25%, 0.6399 27.3%, 0.6842 29.5%, 0.7241 31.8%, 0.7599 34.1%, 0.7919 36.4%, 0.8202 38.6%, 0.8452 40.9%, 0.8671 43.2%, 0.8863 45.5%, 0.903 47.7%, 0.9175 50%, 0.93 52.3%, 0.9409 54.5%, 0.9501 56.8%, 0.9581 59.1%, 0.9649 61.4%, 0.9707 63.6%, 0.9756 65.9%, 0.9798 68.2%, 0.9833 70.5%, 0.9862 72.7%, 0.9887 75%, 0.9908 77.3%, 0.9925 79.5%, 0.9939 81.8%, 0.9951 84.1%, 0.9961 86.4%, 0.9969 88.6%, 0.9975 90.9%, 0.9981 93.2%, 0.9985 95.5%, 0.9989 97.7%, 1);
+  --spring-smooth-ms: 700ms;
+
+  /* bounce: zeta 0.58, omega 13 — settles in ~950ms */
+  --spring-bounce: linear(0, 0.0352 2.3%, 0.1251 4.5%, 0.2484 6.8%, 0.3877 9.1%, 0.5292 11.4%, 0.6628 13.6%, 0.7818 15.9%, 0.8823 18.2%, 0.9628 20.5%, 1.0233 22.7%, 1.0655 25%, 1.0916 27.3%, 1.1043 29.5%, 1.1065 31.8%, 1.101 34.1%, 1.0903 36.4%, 1.0765 38.6%, 1.0614 40.9%, 1.0465 43.2%, 1.0325 45.5%, 1.0203 47.7%, 1.0101 50%, 1.0021 52.3%, 0.9962 54.5%, 0.9921 56.8%, 0.9897 59.1%, 0.9887 61.4%, 0.9887 63.6%, 0.9895 65.9%, 0.9907 68.2%, 0.9922 70.5%, 0.9939 72.7%, 0.9954 75%, 0.9969 77.3%, 0.9981 79.5%, 0.9992 81.8%, 1 84.1%, 1.0005 86.4%, 1.0009 88.6%, 1.0011 90.9%, 1.0012 93.2%, 1.0012 95.5%, 1.0011 97.7%, 1);
+  --spring-bounce-ms: 950ms;
+
+  /* soft: zeta 0.78, omega 9 — settles in ~930ms */
+  --spring-soft: linear(0, 0.0164 2.3%, 0.0593 4.5%, 0.1205 6.8%, 0.1935 9.1%, 0.2729 11.4%, 0.3546 13.6%, 0.4355 15.9%, 0.5132 18.2%, 0.5862 20.5%, 0.6533 22.7%, 0.7141 25%, 0.7681 27.3%, 0.8156 29.5%, 0.8566 31.8%, 0.8915 34.1%, 0.9209 36.4%, 0.9452 38.6%, 0.9649 40.9%, 0.9807 43.2%, 0.9931 45.5%, 1.0024 47.7%, 1.0093 50%, 1.0142 52.3%, 1.0173 54.5%, 1.0191 56.8%, 1.0199 59.1%, 1.0198 61.4%, 1.0191 63.6%, 1.018 65.9%, 1.0167 68.2%, 1.0151 70.5%, 1.0135 72.7%, 1.0119 75%, 1.0103 77.3%, 1.0088 79.5%, 1.0074 81.8%, 1.0062 84.1%, 1.005 86.4%, 1.004 88.6%, 1.0032 90.9%, 1.0024 93.2%, 1.0018 95.5%, 1.0013 97.7%, 1);
+  --spring-soft-ms: 930ms;
+
+  /* pop: zeta 0.5, omega 19 — settles in ~670ms */
+  --spring-pop: linear(0, 0.0378 2.3%, 0.1356 4.5%, 0.2712 6.8%, 0.4254 9.1%, 0.5822 11.4%, 0.7299 13.6%, 0.8599 15.9%, 0.9674 18.2%, 1.0502 20.5%, 1.1086 22.7%, 1.1445 25%, 1.161 27.3%, 1.1616 29.5%, 1.1505 31.8%, 1.1313 34.1%, 1.1074 36.4%, 1.0818 38.6%, 1.0567 40.9%, 1.0338 43.2%, 1.0143 45.5%, 0.9986 47.7%, 0.9869 50%, 0.9792 52.3%, 0.9748 54.5%, 0.9734 56.8%, 0.9743 59.1%, 0.9768 61.4%, 0.9803 63.6%, 0.9844 65.9%, 0.9886 68.2%, 0.9925 70.5%, 0.996 72.7%, 0.9989 75%, 1.0012 77.3%, 1.0028 79.5%, 1.0038 81.8%, 1.0043 84.1%, 1.0043 86.4%, 1.004 88.6%, 1.0035 90.9%, 1.0029 93.2%, 1.0022 95.5%, 1.0016 97.7%, 1);
+  --spring-pop-ms: 670ms;
+
+  /* Classic curves, still right for things that should not overshoot: opacity,
+     colour, anything where a bounce would read as a glitch. */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --dur-fast: 140ms;
-  --dur: 260ms;
-  --dur-slow: 480ms;
-  --dur-sheet: 620ms;
+  --ease-emphasis: cubic-bezier(0.2, 0.9, 0.1, 1);
+  --ease-spring: var(--spring-snap);
 
-  /* Ambient palette, rewritten from artwork at runtime. */
-  --art-primary: #5a5a66;
-  --art-secondary: #3a3a44;
-  --art-tertiary: #6b6b78;
-  --art-background: #121214;
+  --dur-instant: 90ms;
+  --dur-fast: 160ms;
+  --dur: 260ms;
+  --dur-slow: 420ms;
+  --dur-slower: 620ms;
+  --dur-sheet: 620ms;
+  /* How long the room takes to change colour when the track changes. */
+  --dur-ambient: 1400ms;
+  /* The gap between consecutive items in a staggered entrance. */
+  --stagger: 34ms;
+
+  /* ------------------------------------------------- artwork palette seed */
+
+  --art-primary: #3f4a6b;
+  --art-secondary: #4a3560;
+  --art-tertiary: #2f4257;
+  --art-background: #0d0d10;
+  --art-vibrant: #5b6ea8;
+  --art-light-vibrant: #98a7d8;
+  --art-dark-vibrant: #333f68;
+  --art-muted: #5a5a70;
+  --art-dark-muted: #2a2a36;
+  --art-accent: #8c9ede;
+  --art-on-accent: #0b0b12;
+  --art-glow: #7f92e0;
+  --art-foreground: #ffffff;
+
+  /* The whole palette eases from one record to the next. */
+  transition:
+    --art-primary var(--dur-ambient) var(--ease-out),
+    --art-secondary var(--dur-ambient) var(--ease-out),
+    --art-tertiary var(--dur-ambient) var(--ease-out),
+    --art-background var(--dur-ambient) var(--ease-out),
+    --art-vibrant var(--dur-ambient) var(--ease-out),
+    --art-light-vibrant var(--dur-ambient) var(--ease-out),
+    --art-dark-vibrant var(--dur-ambient) var(--ease-out),
+    --art-muted var(--dur-ambient) var(--ease-out),
+    --art-dark-muted var(--dur-ambient) var(--ease-out),
+    --art-accent var(--dur-ambient) var(--ease-out),
+    --art-glow var(--dur-ambient) var(--ease-out);
 }
+
+/* --------------------------------------------------------------- light mode */
 
 :root[data-theme='light'] {
   color-scheme: light;
@@ -111,12 +299,20 @@
   --text-primary: rgba(0, 0, 0, 0.9);
   --text-secondary: rgba(0, 0, 0, 0.52);
   --text-tertiary: rgba(0, 0, 0, 0.34);
+  --text-quaternary: rgba(0, 0, 0, 0.2);
 
   --separator: rgba(0, 0, 0, 0.09);
   --separator-strong: rgba(0, 0, 0, 0.16);
 
-  --glass-tint: rgba(255, 255, 255, 0.58);
-  --glass-tint-strong: rgba(255, 255, 255, 0.84);
+  /* Light glass is the opposite trick: a *white* film that brightens what is
+     behind it, so a pane reads as frosted rather than as a grey wash. */
+  --mat-brightness: 1.12;
+  --mat-tint-ultra: rgba(255, 255, 255, 0.4);
+  --mat-tint-thin: rgba(255, 255, 255, 0.54);
+  --mat-tint-regular: rgba(255, 255, 255, 0.64);
+  --mat-tint-thick: rgba(255, 255, 255, 0.74);
+  --mat-tint-chrome: rgba(255, 255, 255, 0.82);
+
   --glass-tint-light: rgba(255, 255, 255, 0.5);
   --glass-border: rgba(0, 0, 0, 0.09);
   --glass-border-bright: rgba(255, 255, 255, 0.9);
@@ -124,6 +320,57 @@
   --glass-shadow: 0 10px 34px rgba(0, 0, 0, 0.13), 0 1px 2px rgba(0, 0, 0, 0.08);
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
 
+  --rim-light: rgba(255, 255, 255, 1);
+  --rim-mid: rgba(255, 255, 255, 0.35);
+  --rim-dark: rgba(0, 0, 0, 0.07);
+  --spec-strength: 0.5;
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.05);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, 0.07), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --elev-3: 0 4px 10px rgba(0, 0, 0, 0.08), 0 18px 48px rgba(0, 0, 0, 0.12);
+  --elev-4: 0 8px 20px rgba(0, 0, 0, 0.1), 0 34px 90px rgba(0, 0, 0, 0.16);
+  --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
   --artwork-shadow: 0 8px 26px rgba(0, 0, 0, 0.16);
   --artwork-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.24);
+}
+
+/* ------------------------------------------------------------ motion budget */
+
+/*
+ * What the performance tier actually buys. Blur is the single most expensive
+ * thing the app does per frame — each pane is a full-screen read, a
+ * convolution and a composite — so the tiers mostly buy blur radius, and the
+ * bottom one buys none at all.
+ */
+:root[data-perf='medium'] {
+  --mat-blur-ultra: 8px;
+  --mat-blur-thin: 14px;
+  --mat-blur-regular: 20px;
+  --mat-blur-thick: 26px;
+  --mat-blur-chrome: 30px;
+  --mat-saturate: 175%;
+}
+
+:root[data-perf='low'] {
+  --mat-blur-ultra: 0px;
+  --mat-blur-thin: 0px;
+  --mat-blur-regular: 0px;
+  --mat-blur-thick: 0px;
+  --mat-blur-chrome: 0px;
+  --mat-saturate: 100%;
+  /* With no blur to separate them, surfaces need real opacity instead. */
+  --mat-tint-ultra: rgba(28, 28, 33, 0.82);
+  --mat-tint-thin: rgba(28, 28, 33, 0.88);
+  --mat-tint-regular: rgba(26, 26, 31, 0.92);
+  --mat-tint-thick: rgba(24, 24, 29, 0.95);
+  --mat-tint-chrome: rgba(20, 20, 25, 0.97);
+}
+
+:root[data-perf='low'][data-theme='light'] {
+  --mat-tint-ultra: rgba(252, 252, 253, 0.86);
+  --mat-tint-thin: rgba(252, 252, 253, 0.9);
+  --mat-tint-regular: rgba(253, 253, 254, 0.94);
+  --mat-tint-thick: rgba(255, 255, 255, 0.96);
+  --mat-tint-chrome: rgba(255, 255, 255, 0.98);
 }

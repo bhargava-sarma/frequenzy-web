@@ -4,7 +4,6 @@
  */
 
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import type { MenuEntry } from '../components/ContextMenu';
 import {
@@ -16,6 +15,7 @@ import { downloadUrl } from '../lib/subsonic';
 import type { Album, Artist, Song } from '../lib/types';
 import { useLibrary } from '../state/library';
 import { usePlayer, type PlaybackContextInfo } from '../state/player';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 export interface SongMenuOptions {
   /** Present when the song sits inside a playlist we can remove it from. */
@@ -26,7 +26,7 @@ export interface SongMenuOptions {
 }
 
 export function useMediaMenu() {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const { actions } = usePlayer();
   const { isStarred, toggleStar, removeFromPlaylist } = useLibrary();
 

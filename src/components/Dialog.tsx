@@ -29,7 +29,7 @@ export function Dialog({ title, onClose, children, actions }: DialogProps) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="fz-dialog fz-pane" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="fz-dialog fz-mat fz-mat--thick fz-mat--lens fz-mat--e4" role="dialog" aria-modal="true" aria-label={title}>
           <div className="fz-dialog__title">{title}</div>
         <div className="fz-dialog__body">
           {children}

@@ -14,26 +14,38 @@
     <title>Frequenzy</title>
   </head>
   <body>
-    <!-- Liquid-glass refraction filters. Referenced from CSS via url(#...) -->
+    <!--
+      Liquid glass.
+
+      `backdrop-filter` accepts `url()`, which means a surface can refract what
+      is behind it rather than merely blurring it — the thing that separates
+      Apple's Liquid Glass from a rounded rectangle with a blur on it.
+
+      Each filter displaces the backdrop using a map whose red channel carries
+      horizontal shift and whose green channel carries vertical, with mid-grey
+      meaning "leave this pixel alone". The map is neutral across the middle and
+      ramps at the edges, so the centre stays honest and the rim sweeps the
+      background inward the way the thick edge of a real lens does.
+
+      `primitiveUnits="objectBoundingBox"` is what lets one filter serve a
+      52px button and a 900px sheet: every length becomes a fraction of the
+      element, so the lens fits whatever it is applied to. The two maps differ
+      only in how wide that edge band is — a large panel needs a proportionally
+      narrower one, or the whole surface becomes edge.
+    -->
     <svg class="fz-filter-defs" aria-hidden="true" focusable="false">
       <defs>
-        <filter id="fz-liquid" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
-          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise">
-            <animate attributeName="baseFrequency" dur="34s" values="0.008 0.012;0.012 0.008;0.008 0.012" repeatCount="indefinite" />
-          </feTurbulence>
-          <feGaussianBlur in="noise" stdDeviation="8" result="softNoise" />
-          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="16" xChannelSelector="R" yChannelSelector="G" />
+        <filter id="fz-lens" x="0%" y="0%" width="100%" height="100%" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+          <feImage href="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22x%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%220%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22rgb%280%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.13%22%20stop-color%3D%22rgb%28128%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.87%22%20stop-color%3D%22rgb%28128%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22rgb%28255%2C0%2C0%29%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22y%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22rgb%280%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.13%22%20stop-color%3D%22rgb%280%2C128%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.87%22%20stop-color%3D%22rgb%280%2C128%2C0%29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22rgb%280%2C255%2C0%29%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22url%28%23x%29%22%2F%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22url%28%23y%29%22%20style%3D%22mix-blend-mode%3Ascreen%22%2F%3E%3C%2Fsvg%3E" result="map" preserveAspectRatio="none" x="0" y="0" width="1" height="1" />
+          <feDisplacementMap in="SourceGraphic" in2="map" scale="0.05" xChannelSelector="R" yChannelSelector="G" />
         </filter>
-        <filter id="fz-liquid-strong" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
-          <feTurbulence type="fractalNoise" baseFrequency="0.004 0.009" numOctaves="3" seed="19" result="noise">
-            <animate attributeName="baseFrequency" dur="48s" values="0.004 0.009;0.010 0.004;0.004 0.009" repeatCount="indefinite" />
-          </feTurbulence>
-          <feGaussianBlur in="noise" stdDeviation="14" result="softNoise" />
-          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="42" xChannelSelector="R" yChannelSelector="G" />
+        <filter id="fz-lens-soft" x="0%" y="0%" width="100%" height="100%" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+          <feImage href="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22x%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%220%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22rgb%280%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.055%22%20stop-color%3D%22rgb%28128%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.945%22%20stop-color%3D%22rgb%28128%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22rgb%28255%2C0%2C0%29%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22y%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22rgb%280%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.055%22%20stop-color%3D%22rgb%280%2C128%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.945%22%20stop-color%3D%22rgb%280%2C128%2C0%29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22rgb%280%2C255%2C0%29%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22url%28%23x%29%22%2F%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22url%28%23y%29%22%20style%3D%22mix-blend-mode%3Ascreen%22%2F%3E%3C%2Fsvg%3E" result="map" preserveAspectRatio="none" x="0" y="0" width="1" height="1" />
+          <feDisplacementMap in="SourceGraphic" in2="map" scale="0.028" xChannelSelector="R" yChannelSelector="G" />
         </filter>
-        <filter id="fz-grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
+        <filter id="fz-lens-strong" x="0%" y="0%" width="100%" height="100%" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+          <feImage href="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22x%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%220%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22rgb%280%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.13%22%20stop-color%3D%22rgb%28128%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.87%22%20stop-color%3D%22rgb%28128%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22rgb%28255%2C0%2C0%29%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22y%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22rgb%280%2C0%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.13%22%20stop-color%3D%22rgb%280%2C128%2C0%29%22%2F%3E%3Cstop%20offset%3D%220.87%22%20stop-color%3D%22rgb%280%2C128%2C0%29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22rgb%280%2C255%2C0%29%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22url%28%23x%29%22%2F%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22url%28%23y%29%22%20style%3D%22mix-blend-mode%3Ascreen%22%2F%3E%3C%2Fsvg%3E" result="map" preserveAspectRatio="none" x="0" y="0" width="1" height="1" />
+          <feDisplacementMap in="SourceGraphic" in2="map" scale="0.085" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </defs>
     </svg>

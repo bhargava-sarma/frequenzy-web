@@ -6,14 +6,13 @@
  * decade, or across everything.
  */
 
-import { useNavigate } from 'react-router-dom';
-
 import { Page } from '../components/Page';
 import { PlayIcon, RadioIcon } from '../components/Icons';
 import { getGenres, getRandomSongs, getStarred } from '../lib/subsonic';
 import { hashHue } from '../lib/format';
 import { useAsync } from '../hooks/useAsync';
 import { usePlayer } from '../state/player';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 interface Station {
   id: string;
@@ -24,7 +23,7 @@ interface Station {
 
 export function Radio({ onMenuClick }: { onMenuClick?: () => void }) {
   const { actions } = usePlayer();
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const genres = useAsync((signal) => getGenres(signal), []);
 
   const stations: Station[] = [

@@ -82,19 +82,32 @@
   width: 100%;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-primary);
   position: relative;
+  isolation: isolate;
   transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
+/*
+ * Glyphs sit back until their row is selected. A sidebar of eleven accent-red
+ * icons is eleven things asking for attention at once, and none of them is the
+ * thing you are looking at.
+ */
 .fz-nav-item svg {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   flex: none;
-  color: var(--accent);
-  transition: transform var(--dur) var(--ease-spring);
+  color: var(--text-tertiary);
+}
+
+.fz-nav-item:hover svg {
+  color: var(--text-secondary);
+}
+
+.fz-nav-item.is-active svg {
+  color: var(--art-accent);
 }
 
 .fz-nav-item:hover {
@@ -105,28 +118,46 @@
   transform: scale(1.12);
 }
 
+/*
+ * The selected row is a pill of the record's own colour, not a grey box. It
+ * arrives by growing out of nothing rather than by cutting, which is the one
+ * place in the sidebar where motion is worth the pixels.
+ */
 .fz-nav-item.is-active {
-  background: var(--bg-active);
   font-weight: 600;
+  color: #fff;
+}
+
+:root[data-theme='light'] .fz-nav-item.is-active {
+  color: #000;
 }
 
 .fz-nav-item.is-active::before {
   content: '';
   position: absolute;
-  left: -10px;
-  top: 50%;
-  translate: 0 -50%;
-  width: 3px;
-  height: 16px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
-  animation: fz-pop-in var(--dur) var(--ease-spring);
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in oklab, var(--art-accent) 30%, transparent),
+      color-mix(in oklab, var(--art-vibrant) 16%, transparent)
+    );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  animation: fz-pill-in var(--dur-slow) var(--spring-snap);
+  transition: background var(--dur-ambient) var(--ease-out);
 }
 
-@keyframes fz-pop-in {
-  from { transform: scaleY(0.2); opacity: 0; }
-  to { transform: scaleY(1); opacity: 1; }
+@supports not (color: color-mix(in oklab, red, blue)) {
+  .fz-nav-item.is-active::before {
+    background: var(--bg-active);
+  }
+}
+
+@keyframes fz-pill-in {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
 
 .fz-nav-item__badge {
@@ -197,10 +228,15 @@
 
 /* The bar only materializes once the page has scrolled under it. */
 .fz-topbar.is-stuck {
-  background: var(--glass-tint);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: var(--mat-tint-chrome);
+  backdrop-filter: blur(var(--mat-blur-chrome)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
+  -webkit-backdrop-filter: blur(var(--mat-blur-chrome)) saturate(var(--mat-saturate)) brightness(var(--mat-brightness));
   border-bottom-color: var(--separator);
+}
+
+:root[data-perf='low'] .fz-topbar.is-stuck {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .fz-topbar__nav {

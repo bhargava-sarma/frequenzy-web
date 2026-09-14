@@ -6,8 +6,6 @@
  * most recently added albums shown underneath.
  */
 
-import { useNavigate } from 'react-router-dom';
-
 import { AlbumCard, CardSkeleton } from '../components/Cards';
 import { Artwork } from '../components/Artwork';
 import { Page } from '../components/Page';
@@ -20,6 +18,7 @@ import { getAlbumList } from '../lib/subsonic';
 import { useAsync } from '../hooks/useAsync';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 const SECTIONS = [
   { to: '/library/playlists', label: 'Playlists', icon: <PlaylistIcon /> },
@@ -34,7 +33,7 @@ const SECTIONS = [
 ];
 
 export function LibraryHome() {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const { playlists, createPlaylist } = useLibrary();
   const { prompt } = useDialogs();
   const recent = useAsync((signal) => getAlbumList('newest', { size: 12 }, signal), []);

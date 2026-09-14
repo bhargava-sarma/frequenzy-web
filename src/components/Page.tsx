@@ -7,11 +7,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { ChevronLeftIcon, ChevronRightIcon, GripIcon } from './Icons';
 import { usePullToRefresh } from '../hooks/useGestures';
 import { useIsTouch } from '../hooks/useLayout';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 interface PageProps {
   title: string;
@@ -33,7 +33,7 @@ interface PageProps {
 export function Page({
   title, subtitle, hero, actions, children, onMenuClick, onRefresh, showTitle = true,
 }: PageProps) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const touch = useIsTouch();
   const [stuck, setStuck] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);

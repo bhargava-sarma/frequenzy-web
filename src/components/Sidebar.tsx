@@ -1,7 +1,7 @@
 /** Navigation rail: search, the three top-level destinations, library, playlists. */
 
 import { useState, type MouseEvent } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 import { Artwork } from './Artwork';
 import { ConnectionBadge } from './ConnectionBadge';
@@ -15,6 +15,7 @@ import { getPlaylist } from '../lib/subsonic';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { useMediaMenu } from '../hooks/useMediaMenu';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 const PRIMARY = [
   { to: '/', label: 'Listen Now', icon: <ListenNowIcon />, end: true },
@@ -34,7 +35,7 @@ const LIBRARY = [
 ];
 
 export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const { playlists, createPlaylist, renamePlaylist, deletePlaylist } = useLibrary();
   const { prompt } = useDialogs();
   const { playlistMenu } = useMediaMenu();

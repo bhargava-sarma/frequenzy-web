@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { Artwork } from '../components/Artwork';
 import { AlbumCard, ArtistCard, CardSkeleton, PlaylistCard } from '../components/Cards';
@@ -26,6 +26,7 @@ import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { usePlayer } from '../state/player';
 import { useSettings } from '../state/settings';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 type AlbumSort =
   | 'alphabeticalByName' | 'alphabeticalByArtist' | 'newest' | 'frequent'
@@ -107,7 +108,7 @@ export function LibraryAlbums({ onMenuClick }: { onMenuClick?: () => void }) {
 
 /** The list density for albums — artwork, title, artist, year. */
 function AlbumRows({ albums }: { albums: Album[] }) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   return (
     <div className="fz-rows fz-stagger-fast">
       {albums.map((album) => (
@@ -150,7 +151,7 @@ export function LibraryRecent({ onMenuClick }: { onMenuClick?: () => void }) {
 /* ------------------------------------------------------------------ artists */
 
 export function LibraryArtists({ onMenuClick }: { onMenuClick?: () => void }) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const { settings } = useSettings();
   const [filter, setFilter] = useState('');
   const indexes = useAsync((signal) => getArtists(signal), []);
@@ -326,7 +327,7 @@ export function LibrarySongs({ onMenuClick }: { onMenuClick?: () => void }) {
 /* ------------------------------------------------------------------- genres */
 
 export function LibraryGenres({ onMenuClick }: { onMenuClick?: () => void }) {
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const genres = useAsync((signal) => getGenres(signal), []);
   const sorted = (genres.data ?? []).slice().sort((a, b) => (b.songCount ?? 0) - (a.songCount ?? 0));
 

@@ -1,7 +1,7 @@
 /** One album: cover, credits, the track list, and everything else by that artist. */
 
 import { useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { AlbumCard, Shelf } from '../components/Cards';
 import { Artwork } from '../components/Artwork';
@@ -13,15 +13,18 @@ import { EllipsisIcon, HeartIcon, PlayIcon, ShuffleIcon } from '../components/Ic
 import { albumArtist, formatDurationLong, formatCount, qualityBadge } from '../lib/format';
 import { getAlbum, getArtist } from '../lib/subsonic';
 import { useAsync } from '../hooks/useAsync';
+import { usePalette } from '../hooks/usePalette';
+import { MORPH_NAME } from '../hooks/useSmoothNavigate';
 import { useDialogs } from '../state/dialogs';
 import { useLibrary } from '../state/library';
 import { usePlayer } from '../state/player';
 import { useMediaMenu } from '../hooks/useMediaMenu';
+import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
 
 export function AlbumDetail() {
   const { id = '' } = useParams();
   const albumId = decodeURIComponent(id);
-  const navigate = useNavigate();
+  const navigate = useSmoothNavigate();
   const { actions } = usePlayer();
   const { isStarred, toggleStar } = useLibrary();
   const { addToPlaylist } = useDialogs();
@@ -29,6 +32,7 @@ export function AlbumDetail() {
   const { openAt, menu } = useContextMenu();
 
   const album = useAsync((signal) => getAlbum(albumId, signal), [albumId]);
+  const { palette } = usePalette(album.data?.coverArt, true);
   const artist = useAsync(
     (signal) => (album.data?.artistId ? getArtist(album.data.artistId, signal) : Promise.resolve(null)),
     [album.data?.artistId],
@@ -55,7 +59,10 @@ export function AlbumDetail() {
   if (album.loading) {
     return (
       <Page title="Album">
-        <div className="fz-detail-head">
+        {/* The header borrows this record's accent rather than the app's, so the
+          artist link stays legible against the wash above — and stays this
+          album's colour even while something else is playing. */}
+      <div className="fz-detail-head" style={{ ['--art-accent' as string]: palette.accent }}>
           <div className="fz-skeleton" style={{ width: 232, height: 232, borderRadius: 'var(--radius-lg)' }} />
           <div style={{ flex: 1, alignSelf: 'flex-end' }}>
             <div className="fz-skeleton" style={{ height: 28, width: '46%', marginBottom: 10 }} />
@@ -78,8 +85,22 @@ export function AlbumDetail() {
 
   return (
     <Page title={data.name} showTitle={false}>
+      <div
+        className="fz-detail-wash"
+        aria-hidden="true"
+        style={{
+          ['--card-glow' as string]: palette.vibrant,
+          ['--card-deep' as string]: palette.darkVibrant,
+        }}
+      />
       <div className="fz-detail-head">
-        <Artwork coverArt={data.coverArt} name={data.name} size={600} className="fz-detail-head__art" />
+        <Artwork
+          coverArt={data.coverArt}
+          name={data.name}
+          size={600}
+          className="fz-detail-head__art"
+          morphName={MORPH_NAME}
+        />
         <div className="fz-detail-head__info">
           <h1 className="fz-detail-head__title">{data.name}</h1>
           <div

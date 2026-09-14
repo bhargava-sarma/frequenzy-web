@@ -1,133 +1,84 @@
 /*
  * Motion.
  *
- * Two rules hold everything together: things that enter rise a little as they
- * fade, and things that leave just fade. Durations are short enough to feel
- * instant on a click and long enough to be legible on a page change.
+ * The rules this file plays by, because "more animation" is not the same thing
+ * as "feels better":
+ *
+ *   - Only `transform`, `opacity` and registered custom properties are
+ *     animated. Anything that animates `width`, `top`, `filter` or a blur
+ *     radius forces layout or re-rasterisation every frame, which is exactly
+ *     how an app that is trying to feel expensive ends up feeling cheap.
+ *
+ *   - Entrances use springs, because objects arriving somewhere overshoot
+ *     slightly and settle. Exits and colour changes use plain curves, because
+ *     something leaving should not draw attention on its way out.
+ *
+ *   - Anything tied to scrolling runs on a scroll timeline, off the main
+ *     thread, rather than on a scroll handler. A parallax driven from
+ *     JavaScript is a parallax that stutters.
+ *
+ *   - Every one of these collapses under `prefers-reduced-motion` and under
+ *     the app's own Reduce Motion switch.
  */
 
-:root {
-  --dur-micro: 110ms;
-  --dur-enter: 380ms;
-  --dur-exit: 200ms;
-  --stagger: 34ms;
-  /* Overshoots slightly — the curve behind every "pop" in the interface. */
-  --ease-emphasis: cubic-bezier(0.2, 0.9, 0.25, 1.08);
-}
-
-/* --------------------------------------------------------------- entrances */
-
-@keyframes fz-rise {
-  from { opacity: 0; transform: translate3d(0, 14px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes fz-rise-sm {
-  from { opacity: 0; transform: translate3d(0, 7px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes fz-scale-in {
-  from { opacity: 0; transform: scale(0.94); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes fz-slide-left {
-  from { opacity: 0; transform: translate3d(16px, 0, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes fz-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* ------------------------------------------------------------ press physics */
 
 /*
- * Staggered lists. Children animate in sequence via an index custom property,
- * capped so a 500-album grid does not take twenty seconds to appear.
- */
-.fz-stagger > * {
-  animation: fz-rise var(--dur-enter) var(--ease-out) backwards;
-  animation-delay: calc(var(--i, 0) * var(--stagger));
-}
-
-.fz-stagger-fast > * {
-  animation: fz-rise-sm 300ms var(--ease-out) backwards;
-  animation-delay: calc(var(--i, 0) * 18ms);
-}
-
-/* --------------------------------------------------------- page transitions */
-
-.fz-page-enter {
-  animation: fz-page-in 420ms var(--ease-out);
-}
-
-@keyframes fz-page-in {
-  from { opacity: 0; transform: translate3d(0, 12px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-/* Headers lead the content in by a beat. */
-.fz-page__header {
-  animation: fz-rise 460ms var(--ease-out) backwards;
-}
-
-.fz-section {
-  animation: fz-rise 480ms var(--ease-out) backwards;
-  animation-delay: 60ms;
-}
-
-/* ------------------------------------------------------- track change cross-fade */
-
-/*
- * When the track changes, the bar's artwork dissolves rather than snapping, and
- * the text slides up as if the new title pushed the old one out.
- */
-@keyframes fz-art-swap {
-  from { opacity: 0; transform: scale(1.06); filter: blur(6px); }
-  to { opacity: 1; transform: none; filter: none; }
-}
-
-@keyframes fz-text-swap {
-  from { opacity: 0; transform: translate3d(0, 8px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-.fz-swap-art {
-  animation: fz-art-swap 520ms var(--ease-out);
-}
-
-.fz-swap-text {
-  animation: fz-text-swap 380ms var(--ease-out);
-}
-
-/* ------------------------------------------------------------ press feedback */
-
-/*
- * Every control shares one press response, so the whole interface feels like it
- * is made of the same stuff.
+ * The single most important animation in the app: everything you can touch
+ * moves when you touch it. Apple's controls compress toward their centre on
+ * press and spring back on release, and the absence of that is most of what
+ * makes a web app feel like a web app.
  */
 .fz-btn,
 .fz-icon-btn,
 .fz-chip,
-.fz-transport__btn,
+.fz-card,
+.fz-nav-item,
 .fz-tab,
+.fz-linkrow,
+.fz-menu__item,
 .fz-mini__btn,
-.fz-card {
+.fz-transport__btn,
+.fz-play-overlay,
+.fz-swipe-action,
+.fz-segmented button {
   transition:
-    transform var(--dur-micro) var(--ease-out),
-    background-color 180ms var(--ease-out),
-    color 180ms var(--ease-out),
-    box-shadow 240ms var(--ease-out),
-    opacity 180ms var(--ease-out);
+    transform var(--dur-slow) var(--spring-snap),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
 }
 
 .fz-btn:active,
-.fz-chip:active {
+.fz-chip:active,
+.fz-segmented button:active {
   transform: scale(0.955);
+  transition-duration: var(--dur-instant);
 }
 
-/* A specular sweep across solid buttons on hover. */
+.fz-icon-btn:active,
+.fz-mini__btn:active,
+.fz-transport__btn:active {
+  transform: scale(0.88);
+  transition-duration: var(--dur-instant);
+}
+
+.fz-nav-item:active,
+.fz-linkrow:active,
+.fz-menu__item:active {
+  transform: scale(0.985);
+  transition-duration: var(--dur-instant);
+}
+
+/* The primary button also dips its shadow, so it reads as pressed into the
+   page rather than merely smaller. */
+.fz-btn--solid:active {
+  box-shadow: 0 1px 4px var(--accent-glow);
+}
+
+/* A specular streak crosses the solid button on hover — small, but it is the
+   cue that the surface is glossy rather than painted. */
 .fz-btn--solid {
   position: relative;
   overflow: hidden;
@@ -137,249 +88,226 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: inherit;
   background: linear-gradient(
-    100deg,
-    transparent 20%,
-    rgba(255, 255, 255, 0.34) 46%,
-    transparent 68%
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.34) 48%,
+    transparent 62%
   );
-  transform: translateX(-130%);
+  transform: translateX(-120%);
   transition: transform 720ms var(--ease-out);
   pointer-events: none;
 }
 
 .fz-btn--solid:hover::after {
-  transform: translateX(130%);
+  transform: translateX(120%);
 }
 
-/* ------------------------------------------------------------- icon morphing */
+/* --------------------------------------------------------------- entrances */
 
-/* Play and pause swap with a quick scale rather than a hard cut. */
-@keyframes fz-icon-pop {
-  0% { transform: scale(0.7); opacity: 0; }
-  60% { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+@keyframes fz-rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.985); }
+  to { opacity: 1; transform: none; }
 }
 
-.fz-transport__btn--play svg,
-.fz-mini__btn svg {
-  animation: fz-icon-pop 260ms var(--ease-emphasis);
+@keyframes fz-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* --------------------------------------------------------------- shimmer */
-
-@keyframes fz-pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+@keyframes fz-scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
 }
 
-/* Artwork settles in rather than popping. */
-.fz-art img {
-  transition: opacity 620ms var(--ease-out), transform 620ms var(--ease-out);
-  transform: scale(1.03);
+@keyframes fz-slide-left {
+  from { opacity: 0; transform: translate3d(22px, 0, 0); }
+  to { opacity: 1; transform: none; }
 }
 
-.fz-art img.is-loaded {
-  transform: none;
+/*
+ * Staggered entrances. `--i` is set per child by nth-child below rather than
+ * inline, so a list of a hundred rows costs nothing in JavaScript.
+ */
+.fz-stagger > *,
+.fz-stagger-fast > * {
+  animation: fz-rise var(--stagger-dur, 560ms) var(--spring-smooth) backwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
 }
 
-/* --------------------------------------------------------------- reduce motion */
-
-:root[data-motion='reduced'] .fz-stagger > *,
-:root[data-motion='reduced'] .fz-stagger-fast > *,
-:root[data-motion='reduced'] .fz-section,
-:root[data-motion='reduced'] .fz-page__header,
-:root[data-motion='reduced'] .fz-page-enter {
-  animation: none !important;
+.fz-stagger-fast > * {
+  --stagger-dur: 420ms;
+  --stagger: 22ms;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .fz-stagger > *,
-  .fz-stagger-fast > *,
-  .fz-section,
-  .fz-page__header,
-  .fz-page-enter {
-    animation: none !important;
+.fz-stagger > *:nth-child(1) { --i: 0; }
+.fz-stagger > *:nth-child(2) { --i: 1; }
+.fz-stagger > *:nth-child(3) { --i: 2; }
+.fz-stagger > *:nth-child(4) { --i: 3; }
+.fz-stagger > *:nth-child(5) { --i: 4; }
+.fz-stagger > *:nth-child(6) { --i: 5; }
+.fz-stagger > *:nth-child(7) { --i: 6; }
+.fz-stagger > *:nth-child(8) { --i: 7; }
+.fz-stagger > *:nth-child(9) { --i: 8; }
+.fz-stagger > *:nth-child(10) { --i: 9; }
+.fz-stagger > *:nth-child(11) { --i: 10; }
+.fz-stagger > *:nth-child(n + 12) { --i: 11; }
+
+.fz-stagger-fast > *:nth-child(1) { --i: 0; }
+.fz-stagger-fast > *:nth-child(2) { --i: 1; }
+.fz-stagger-fast > *:nth-child(3) { --i: 2; }
+.fz-stagger-fast > *:nth-child(4) { --i: 3; }
+.fz-stagger-fast > *:nth-child(5) { --i: 4; }
+.fz-stagger-fast > *:nth-child(6) { --i: 5; }
+.fz-stagger-fast > *:nth-child(7) { --i: 6; }
+.fz-stagger-fast > *:nth-child(8) { --i: 7; }
+.fz-stagger-fast > *:nth-child(n + 9) { --i: 8; }
+
+.fz-page-enter {
+  animation: fz-rise 480ms var(--spring-smooth);
+}
+
+.fz-page__header {
+  animation: fz-rise 620ms var(--spring-smooth) backwards;
+}
+
+.fz-section {
+  animation: fz-rise 560ms var(--spring-smooth) backwards;
+}
+
+.fz-section:nth-of-type(2) { animation-delay: 60ms; }
+.fz-section:nth-of-type(3) { animation-delay: 110ms; }
+.fz-section:nth-of-type(4) { animation-delay: 150ms; }
+.fz-section:nth-of-type(n + 5) { animation-delay: 180ms; }
+
+/* ------------------------------------------------------- scroll-driven work */
+
+/*
+ * Scroll timelines. These run on the compositor: no scroll listener, no
+ * layout read, no jank at the exact moment the user is most likely to notice
+ * it. Everything here is progressive — where `animation-timeline` is missing,
+ * the element simply sits at its final state.
+ */
+@supports (animation-timeline: view()) {
+  /* Shelves and grids reveal as they come up the page rather than all at once
+     on mount, so a long library page keeps unfolding as you scroll it. */
+  .fz-section {
+    animation: fz-rise-scroll linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 42%;
+  }
+
+  @keyframes fz-rise-scroll {
+    from { opacity: 0; transform: translate3d(0, 26px, 0); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* The detail header drifts and fades as it leaves — the parallax Apple Music
+     uses behind an album's cover. */
+  .fz-detail-head__art {
+    animation: fz-hero-parallax linear both;
+    animation-timeline: view();
+    animation-range: exit 0% exit 100%;
+  }
+
+  @keyframes fz-hero-parallax {
+    from { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+    to { transform: translate3d(0, -34px, 0) scale(0.94); opacity: 0.35; }
+  }
+
+  /* The big page title shrinks into the bar rather than merely scrolling off. */
+  .fz-page__title {
+    animation: fz-title-collapse linear both;
+    animation-timeline: view();
+    animation-range: exit 0% exit 90%;
+    transform-origin: left center;
+  }
+
+  @keyframes fz-title-collapse {
+    from { transform: none; opacity: 1; }
+    to { transform: translate3d(0, -10px, 0) scale(0.88); opacity: 0; }
   }
 }
 
 /*
- * Stagger indices.
- *
- * Setting --i from JS would mean threading an index through every list that
- * exists; nth-child covers the first two rows of any grid or shelf, which is
- * all the eye tracks anyway. Anything later simply arrives with the last delay.
+ * Off-screen sections stop being painted entirely. On a library page with a
+ * dozen shelves this is the difference between compositing twelve rows of
+ * artwork every frame and compositing the two you can see.
  */
-.fz-stagger > *,
-.fz-stagger-fast > * {
-  --i: 12;
+.fz-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
 }
 
-.fz-stagger > *:nth-child(1),  .fz-stagger-fast > *:nth-child(1)  { --i: 0; }
-.fz-stagger > *:nth-child(2),  .fz-stagger-fast > *:nth-child(2)  { --i: 1; }
-.fz-stagger > *:nth-child(3),  .fz-stagger-fast > *:nth-child(3)  { --i: 2; }
-.fz-stagger > *:nth-child(4),  .fz-stagger-fast > *:nth-child(4)  { --i: 3; }
-.fz-stagger > *:nth-child(5),  .fz-stagger-fast > *:nth-child(5)  { --i: 4; }
-.fz-stagger > *:nth-child(6),  .fz-stagger-fast > *:nth-child(6)  { --i: 5; }
-.fz-stagger > *:nth-child(7),  .fz-stagger-fast > *:nth-child(7)  { --i: 6; }
-.fz-stagger > *:nth-child(8),  .fz-stagger-fast > *:nth-child(8)  { --i: 7; }
-.fz-stagger > *:nth-child(9),  .fz-stagger-fast > *:nth-child(9)  { --i: 8; }
-.fz-stagger > *:nth-child(10), .fz-stagger-fast > *:nth-child(10) { --i: 9; }
-.fz-stagger > *:nth-child(11), .fz-stagger-fast > *:nth-child(11) { --i: 10; }
-.fz-stagger > *:nth-child(12), .fz-stagger-fast > *:nth-child(12) { --i: 11; }
-
-/* ------------------------------------------------------------------ scrubber */
+/* ---------------------------------------------------------- view transitions */
 
 /*
- * The scrubber is the control people touch most, so it gets the most attention:
- * the track thickens under the pointer, the fill picks up the accent, and the
- * knob springs out rather than appearing.
+ * Route changes. The old page cross-dissolves down and back while the new one
+ * rises into place, which reads as depth rather than as a slide.
  */
-.fz-scrub {
-  padding: 6px 0;
-  margin: -6px 0;
+::view-transition-old(root) {
+  animation: fz-vt-out 240ms var(--ease-out) both;
 }
 
-.fz-scrub__track {
-  transition:
-    height 220ms var(--ease-emphasis),
-    background-color 220ms var(--ease-out);
+::view-transition-new(root) {
+  animation: fz-vt-in 420ms var(--spring-smooth) both;
 }
 
-.fz-scrub__fill {
-  transition: background-color 220ms var(--ease-out);
+@keyframes fz-vt-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.985); }
 }
 
-.fz-scrub:hover .fz-scrub__fill,
-.fz-scrub.is-dragging .fz-scrub__fill {
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-.fz-scrub__knob {
-  transition:
-    transform 320ms var(--ease-emphasis),
-    box-shadow 220ms var(--ease-out);
-}
-
-.fz-scrub.is-dragging .fz-scrub__knob {
-  transform: translate(-50%, -50%) scale(1.28);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(255, 255, 255, 0.12);
-}
-
-/* --------------------------------------------------------------- surfaces */
-
-/* Menus, sheets and dialogs share the pane material and a spring entrance. */
-.fz-menu {
-  animation: fz-menu-in 220ms var(--ease-emphasis);
-}
-
-@keyframes fz-menu-in {
-  from { opacity: 0; transform: scale(0.93) translateY(-4px); }
+@keyframes fz-vt-in {
+  from { opacity: 0; transform: scale(1.012) translateY(10px); }
   to { opacity: 1; transform: none; }
 }
 
-.fz-dialog {
-  animation: fz-dialog-in 420ms var(--ease-emphasis);
+/*
+ * The artwork you clicked is the same object on the next screen, so it morphs
+ * between the two rather than being redrawn. `view-transition-name` is assigned
+ * per navigation in JavaScript; two elements may never carry the same name at
+ * once, which is why only the source and destination get it.
+ */
+::view-transition-group(art) {
+  animation-duration: 520ms;
+  animation-timing-function: var(--spring-smooth);
 }
 
-@keyframes fz-dialog-in {
-  from { opacity: 0; transform: scale(0.9) translateY(16px); }
+::view-transition-old(art),
+::view-transition-new(art) {
+  /* Both halves of a morph should occupy the whole frame and cross-fade, not
+     letterbox inside it. */
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ------------------------------------------------------------ track changes */
+
+/*
+ * The now-playing artwork and text swap by cross-dissolving rather than
+ * blinking. Keyed on the song id in the markup, so React remounts them and the
+ * entry animation runs for free.
+ */
+.fz-swap-art {
+  animation: fz-swap-art 520ms var(--spring-smooth);
+}
+
+@keyframes fz-swap-art {
+  from { opacity: 0; transform: scale(0.86) rotate(-3deg); }
   to { opacity: 1; transform: none; }
 }
 
-/* --------------------------------------------------------- sidebar indicator */
-
-/*
- * The active marker grows out of the rail rather than blinking on, and nav rows
- * shift a hair on hover so the sidebar feels responsive to the pointer.
- */
-.fz-nav-item,
-.fz-playlist-item {
-  transition:
-    background-color 180ms var(--ease-out),
-    transform 220ms var(--ease-out),
-    color 180ms var(--ease-out);
+.fz-swap-text {
+  animation: fz-swap-text 460ms var(--spring-smooth);
 }
 
-.fz-nav-item:hover,
-.fz-playlist-item:hover {
-  transform: translateX(2px);
+@keyframes fz-swap-text {
+  from { opacity: 0; transform: translate3d(0, 9px, 0); }
+  to { opacity: 1; transform: none; }
 }
 
-.fz-nav-item.is-active::before {
-  animation: fz-marker-in 420ms var(--ease-emphasis);
-}
-
-@keyframes fz-marker-in {
-  from { transform: translateY(-50%) scaleY(0.15); opacity: 0; }
-  to { transform: translateY(-50%) scaleY(1); opacity: 1; }
-}
-
-/* ------------------------------------------------------------------ lyrics */
-
-/* The active line settles rather than snapping between weights. */
-.fz-lyric {
-  transition:
-    color 520ms var(--ease-out),
-    transform 520ms var(--ease-emphasis),
-    filter 520ms var(--ease-out),
-    opacity 520ms var(--ease-out);
-}
-
-.fz-lyric.is-active {
-  transform: scale(1.025);
-}
-
-/* --------------------------------------------------------------- skeletons */
-
-/* Skeletons dissolve into their content instead of being swapped out. */
-.fz-skeleton {
-  animation: fz-fade 240ms var(--ease-out);
-}
-
-/* ------------------------------------------------------------ empty states */
-
-.fz-empty {
-  animation: fz-scale-in 460ms var(--ease-out);
-}
-
-.fz-empty svg {
-  animation: fz-pulse-soft 3.6s var(--ease-in-out) infinite;
-}
-
-/* ------------------------------------------------------------- search field */
-
-.fz-input {
-  transition:
-    background-color 200ms var(--ease-out),
-    border-color 200ms var(--ease-out),
-    box-shadow 240ms var(--ease-out);
-}
-
-.fz-input:focus-within {
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* ------------------------------------------------------ full player artwork */
-
-/*
- * The cover lifts on play and drops back on pause, with the glow tracking it —
- * the single clearest signal of playback state on the whole screen.
- */
-.fz-player__art {
-  transition:
-    transform 720ms var(--ease-emphasis),
-    box-shadow 720ms var(--ease-out);
-}
-
-.fz-player__art.is-playing {
-  box-shadow:
-    0 40px 100px rgba(0, 0, 0, 0.7),
-    0 0 120px -30px var(--art-primary);
-}
-
-/* ------------------------------------------------------- playing artwork */
+/* ---------------------------------------------------------------- artwork */
 
 /*
  * A very slow float while music plays. Barely perceptible frame to frame, but
@@ -394,15 +322,193 @@
   animation: fz-float 7s var(--ease-in-out) infinite;
 }
 
-/* The equaliser bars ease rather than ping between heights. */
-.fz-eq span {
-  animation-timing-function: var(--ease-in-out);
+/* Paused artwork shrinks back the way a record lifts off the platter. */
+.fz-player__art {
+  transition: transform var(--dur-slower) var(--spring-smooth), box-shadow var(--dur-slower) var(--ease-out);
+}
+
+.fz-player__art:not(.is-playing) {
+  transform: scale(0.93);
+}
+
+/* ------------------------------------------------------------------- cards */
+
+/*
+ * Cards lift, tilt fractionally toward the pointer, and bloom a shadow in
+ * their own colour — the colour comes from the artwork, so a red album throws
+ * a red shadow.
+ */
+.fz-card__art {
+  transition:
+    transform var(--dur-slower) var(--spring-smooth),
+    box-shadow var(--dur-slower) var(--ease-out);
+  will-change: transform;
+}
+
+.fz-card:hover .fz-card__art {
+  transform: translate3d(0, -6px, 0) scale(1.035);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 6px 16px color-mix(in oklab, var(--card-glow) 40%, transparent);
+}
+
+@supports not (color: color-mix(in oklab, red, blue)) {
+  .fz-card:hover .fz-card__art {
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.fz-card:active .fz-card__art {
+  transform: translate3d(0, -1px, 0) scale(0.99);
+  transition-duration: var(--dur-instant);
+}
+
+.fz-card__title,
+.fz-card__subtitle {
+  transition: color var(--dur) var(--ease-out);
+}
+
+/* The play button grows out of the cover instead of appearing on top of it. */
+.fz-play-overlay {
+  opacity: 0;
+  transform: scale(0.72) translate3d(0, 6px, 0);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur-slow) var(--spring-bounce);
+}
+
+.fz-card:hover .fz-play-overlay,
+.fz-play-overlay:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.fz-play-overlay:active {
+  transform: scale(0.88);
+  transition-duration: var(--dur-instant);
+}
+
+/* Touch has no hover, so the affordance has to be permanent there. */
+@media (hover: none) {
+  .fz-play-overlay {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------- lists */
+
+.fz-track,
+.fz-row,
+.fz-queue-item {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-slow) var(--spring-snap);
+}
+
+.fz-track:active,
+.fz-row:active {
+  transform: scale(0.995);
+  transition-duration: var(--dur-instant);
+}
+
+/* Row actions slide in rather than popping. */
+.fz-track__actions {
+  transition: opacity var(--dur) var(--ease-out), transform var(--dur-slow) var(--spring-snap);
+}
+
+.fz-track:not(:hover) .fz-track__actions {
+  transform: translate3d(6px, 0, 0);
+}
+
+/* --------------------------------------------------------------- the chrome */
+
+/* The tab bar's highlight travels to the tab you picked. */
+.fz-tabbar__pill {
+  transition:
+    transform var(--dur-slower) var(--spring-smooth),
+    width var(--dur-slower) var(--spring-smooth);
+}
+
+.fz-tab svg,
+.fz-nav-item svg {
+  transition: transform var(--dur-slow) var(--spring-bounce), color var(--dur-fast) var(--ease-out);
+}
+
+.fz-tab.is-active svg {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.fz-topbar {
+  transition:
+    background-color var(--dur-slow) var(--ease-out),
+    backdrop-filter var(--dur-slow) var(--ease-out),
+    box-shadow var(--dur-slow) var(--ease-out);
+}
+
+/* --------------------------------------------------------------- scrubber */
+
+/* The scrubber thickens and glows under the pointer, the way iOS sliders do. */
+.fz-scrub__track {
+  transition: height var(--dur) var(--spring-snap), background-color var(--dur) var(--ease-out);
+}
+
+.fz-scrub:hover .fz-scrub__track,
+.fz-scrub.is-dragging .fz-scrub__track {
+  height: 7px;
+}
+
+.fz-scrub__thumb {
+  transition: transform var(--dur-slow) var(--spring-bounce), opacity var(--dur) var(--ease-out);
+}
+
+.fz-scrub:hover .fz-scrub__thumb,
+.fz-scrub.is-dragging .fz-scrub__thumb {
+  transform: scale(1.25);
+}
+
+/* ----------------------------------------------------------------- micro */
+
+/* A heart fills with a pop. */
+@keyframes fz-heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.34); }
+  100% { transform: scale(1); }
+}
+
+.fz-icon-btn.is-on svg,
+.fz-track__star.is-on svg {
+  animation: fz-heart-pop 340ms var(--spring-bounce);
+}
+
+/* State reads as weight as well as colour. */
+.fz-icon-btn.is-on svg [stroke],
+.fz-nav-item.is-active svg [stroke],
+.fz-tab.is-active svg [stroke] {
+  stroke-width: 1.85;
+}
+
+/* Skeletons shimmer, then dissolve into their content. */
+@keyframes fz-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+.fz-skeleton {
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.1) 40%,
+    rgba(255, 255, 255, 0.04) 60%
+  );
+  background-size: 200% 100%;
+  animation: fz-shimmer 1.6s linear infinite;
 }
 
 /* Shelf arrows fade in with the section rather than always sitting there. */
 .fz-section__head .fz-icon-btn {
   opacity: 0;
-  transition: opacity 220ms var(--ease-out), background-color 180ms var(--ease-out);
+  transition: opacity var(--dur) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .fz-section:hover .fz-section__head .fz-icon-btn,
@@ -414,31 +520,166 @@
   opacity: 0 !important;
 }
 
-/* Touch has no hover, so the arrows would never appear. */
 @media (hover: none) {
   .fz-section__head .fz-icon-btn {
     opacity: 1;
   }
 }
 
-/* Heart fills with a small pop when favourited. */
-@keyframes fz-heart-pop {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.32); }
-  100% { transform: scale(1); }
+/* The equaliser beside the playing row eases rather than pinging. */
+.fz-eq span {
+  animation-timing-function: var(--ease-in-out);
 }
 
-.fz-icon-btn.is-on svg,
-.fz-track__star.is-on svg {
-  animation: fz-heart-pop 340ms var(--ease-emphasis);
+/* Empty states arrive with a little weight. */
+.fz-empty {
+  animation: fz-scale-in 460ms var(--spring-smooth);
 }
 
-:root[data-motion='reduced'] .fz-player__art.is-playing {
+/* Menus, sheets and dialogs grow from nothing. */
+.fz-menu {
+  animation: fz-menu-in 260ms var(--spring-snap);
+  transform-origin: var(--origin-x, 50%) var(--origin-y, 0%);
+}
+
+@keyframes fz-menu-in {
+  from { opacity: 0; transform: scale(0.92) translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.fz-dialog {
+  animation: fz-dialog-in 420ms var(--spring-smooth);
+}
+
+@keyframes fz-dialog-in {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+.fz-dialog-backdrop,
+.fz-actionsheet-backdrop {
+  animation: fz-fade var(--dur) var(--ease-out);
+}
+
+.fz-actionsheet {
+  animation: fz-sheet-up 460ms var(--spring-smooth);
+}
+
+@keyframes fz-sheet-up {
+  from { transform: translate3d(0, 100%, 0); }
+  to { transform: none; }
+}
+
+/* --------------------------------------------------- lyrics: the sung line */
+
+.fz-lyric {
+  transition:
+    color 520ms var(--ease-out),
+    transform 520ms var(--spring-smooth),
+    filter 520ms var(--ease-out),
+    opacity 520ms var(--ease-out);
+}
+
+.fz-lyric.is-active {
+  transform: scale(1.025);
+}
+
+/* ------------------------------------------------------------ marquee text */
+
+/*
+ * A title too long for its box scrolls once on hover and returns. Only on
+ * hover: text that moves on its own is an irritation, not a feature.
+ */
+.fz-marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.fz-marquee > span {
+  display: inline-block;
+  will-change: transform;
+}
+
+.fz-marquee.is-overflowing:hover > span {
+  animation: fz-marquee 9s linear infinite;
+}
+
+@keyframes fz-marquee {
+  0%, 12% { transform: translateX(0); }
+  88%, 100% { transform: translateX(calc(-1 * var(--overflow, 0px))); }
+}
+
+/* ------------------------------------------------------------ motion opt-out */
+
+/*
+ * Everything above collapses here. Not "runs faster" — off. Someone who has
+ * asked the operating system to stop moving things has not asked for a
+ * shorter version of the same thing.
+ */
+:root[data-motion='reduced'] .fz-stagger > *,
+:root[data-motion='reduced'] .fz-stagger-fast > *,
+:root[data-motion='reduced'] .fz-section,
+:root[data-motion='reduced'] .fz-page__header,
+:root[data-motion='reduced'] .fz-page-enter,
+:root[data-motion='reduced'] .fz-swap-art,
+:root[data-motion='reduced'] .fz-swap-text {
   animation: none;
 }
 
+:root[data-motion='reduced'] .fz-player__art.is-playing,
+:root[data-motion='reduced'] .fz-skeleton,
+:root[data-motion='reduced'] .fz-backdrop__blob,
+:root[data-motion='reduced'] .fz-ambient__blob {
+  animation: none;
+}
+
+:root[data-motion='reduced'] .fz-player__art:not(.is-playing) {
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .fz-player__art.is-playing {
-    animation: none;
+  .fz-stagger > *,
+  .fz-stagger-fast > *,
+  .fz-section,
+  .fz-page__header,
+  .fz-page-enter,
+  .fz-swap-art,
+  .fz-swap-text,
+  .fz-player__art.is-playing,
+  .fz-skeleton,
+  .fz-backdrop__blob,
+  .fz-ambient__blob,
+  .fz-menu,
+  .fz-dialog,
+  .fz-actionsheet {
+    animation: none !important;
   }
+
+  .fz-player__art:not(.is-playing) {
+    transform: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+/*
+ * The bottom performance tier drops the decorative motion but keeps the motion
+ * that carries meaning: presses, sheets and the travelling tab highlight all
+ * tell you something happened.
+ */
+:root[data-perf='low'] .fz-section,
+:root[data-perf='low'] .fz-stagger > *,
+:root[data-perf='low'] .fz-stagger-fast > * {
+  animation: none;
+}
+
+:root[data-perf='low'] .fz-player__art.is-playing {
+  animation: none;
+}
+
+:root[data-perf='low'] .fz-btn--solid::after {
+  display: none;
 }

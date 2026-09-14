@@ -46,7 +46,7 @@ export function ActionSheet({ entries, header, onClose }: ActionSheetProps) {
         if (event.target === event.currentTarget) dismiss();
       }}
     >
-      <div className={`fz-actionsheet fz-pane ${closing ? 'is-closing' : ''}`} role="menu">
+      <div className={`fz-actionsheet fz-mat fz-mat--thick fz-mat--lens fz-mat--e4 ${closing ? 'is-closing' : ''}`} role="menu">
         {header && (
           <div className="fz-actionsheet__header">
             {header.artwork}
@@ -90,7 +90,7 @@ export function ActionSheet({ entries, header, onClose }: ActionSheetProps) {
 
       <button
         type="button"
-        className={`fz-actionsheet__cancel fz-pane ${closing ? 'is-closing' : ''}`}
+        className={`fz-actionsheet__cancel fz-mat fz-mat--thick fz-mat--lens fz-mat--e3 ${closing ? 'is-closing' : ''}`}
         onClick={dismiss}
       >
         <span style={{ position: 'relative', zIndex: 3 }}>Cancel</span>
