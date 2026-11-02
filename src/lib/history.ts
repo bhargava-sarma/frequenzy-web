@@ -6,10 +6,11 @@
  * tiny subscription so any view can render it.
  */
 
+import { compactSong } from './song';
 import type { Song } from './types';
 
 const KEY = 'frequenzy.history.v1';
-const LIMIT = 200;
+const LIMIT = 250;
 
 export interface HistoryEntry {
   song: Song;
@@ -26,7 +27,7 @@ function load(): HistoryEntry[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter((e) => e?.song?.id && typeof e.playedAt === 'number') : [];
   } catch {
     return [];
   }
@@ -41,13 +42,23 @@ function persist() {
 }
 
 function emit() {
-  for (const fn of listeners) fn(entries);
+  for (const fn of [...listeners]) fn(entries);
 }
 
 export function recordPlay(song: Song): void {
+  if (song.isRadio) return;
   // One entry per song: replaying something moves it to the top rather than
   // filling the list with repeats.
-  entries = [{ song, playedAt: Date.now() }, ...entries.filter((e) => e.song.id !== song.id)].slice(0, LIMIT);
+  entries = [{ song: compactSong(song), playedAt: Date.now() }, ...entries.filter((e) => e.song.id !== song.id)].slice(
+    0,
+    LIMIT,
+  );
+  persist();
+  emit();
+}
+
+export function removeFromHistory(songId: string): void {
+  entries = entries.filter((e) => e.song.id !== songId);
   persist();
   emit();
 }
@@ -65,5 +76,7 @@ export function clearHistory(): void {
 export function subscribeHistory(fn: Listener): () => void {
   listeners.add(fn);
   fn(entries);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }

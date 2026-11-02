@@ -1,968 +1,1043 @@
-/* Now-playing bar, full-screen player, lyrics and queue. */
+/* The full-screen player, its displays, the lyrics and the queue. */
 
-/* --------------------------------------------------------- now playing bar */
+/* ------------------------------------------------------------ full player */
 
-/*
- * A capsule that floats clear of the window edges, not a slab bolted to the
- * bottom of it. Detaching it is what lets it read as glass: light from the
- * ambient backdrop passes around the pill as well as through it, so the shape
- * is legible even against a dark page.
- */
-.fz-bar {
-  grid-area: player;
-  align-self: end;
-  justify-self: center;
-  width: min(1120px, calc(100% - 2 * var(--bar-inset)));
-  height: var(--bar-pill);
-  margin-bottom: var(--bar-inset);
-  display: grid;
-  grid-template-columns: minmax(190px, 1fr) minmax(280px, 430px) minmax(190px, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 0 9px;
-  border-radius: var(--radius-pill);
-  z-index: 40;
-  position: relative;
-  /* `position` + `z-index` already scope the rim pseudo-element. Isolation is
-     harmless here (it does not affect the element's own backdrop-filter) but it
-     buys nothing either, so it stays off. */
-}
-
-.fz-bar__left,
-.fz-bar__right {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-
-.fz-bar__left {
-  padding-left: 6px;
-  gap: 6px;
-}
-
-.fz-bar__right {
-  justify-content: flex-end;
-  padding-right: 4px;
-}
-
-/* Groups inside the pill breathe apart instead of running into one strip. */
-.fz-bar__group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.fz-bar__group + .fz-bar__group {
-  margin-left: 8px;
-}
-
-.fz-transport {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.fz-transport__btn {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  color: var(--text-primary);
-  transition: transform var(--dur-fast) var(--ease-spring), color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out);
-}
-
-.fz-transport__btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-.fz-transport__btn:hover {
-  background: var(--bg-hover);
-}
-
-.fz-transport__btn:active {
-  transform: scale(0.86);
-}
-
-.fz-transport__btn--play svg {
-  width: 26px;
-  height: 26px;
-}
-
-.fz-transport__btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-/* The centered "LCD" panel — the piece that most defines the Apple Music look. */
-/*
- * Two rows: the display itself, and a lane along the bottom that belongs to the
- * scrubber. The scrubber used to be absolutely positioned over the panel, where
- * it ran straight through the artist line on hover. Giving it a row of its own
- * means nothing has to move when it appears.
- *
- * The left padding clears the capsule's own curve — at the artwork's height the
- * corner has already eaten about 10px, and a cover clipped by the bend looks
- * like a bug rather than a bevel.
- */
-.fz-lcd {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  grid-template-rows: 1fr 10px;
-  align-items: center;
-  column-gap: 12px;
-  height: 50px;
-  padding: 2px 18px 0 12px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  transition: background-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
-}
-
-.fz-lcd__art-wrap {
-  grid-row: 1 / span 2;
-}
-
-.fz-lcd__text {
-  grid-row: 1;
-  grid-column: 2;
-}
-
-.fz-lcd__time {
-  grid-row: 1;
-  grid-column: 3;
-}
-
-.fz-lcd {
-  border: 1px solid transparent;
-  transition:
-    background-color 220ms var(--ease-out),
-    border-color 220ms var(--ease-out),
-    box-shadow 260ms var(--ease-out),
-    transform 200ms var(--ease-out);
-}
-
-.fz-lcd:hover {
-  background: var(--bg-hover);
-  border-color: var(--glass-border);
-  box-shadow: var(--elev-1), var(--edge-top);
-}
-
-.fz-lcd:active {
-  transform: scale(0.995);
-}
-
-.fz-lcd__art {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  transition: transform var(--dur) var(--ease-spring);
-}
-
-.fz-lcd:hover .fz-lcd__art {
-  transform: scale(1.06);
-}
-
-.fz-lcd__text {
-  min-width: 0;
+.fp {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  text-align: center;
-}
-
-.fz-lcd__title {
-  font-size: 13px;
-  font-weight: 500;
-  max-width: 100%;
-}
-
-.fz-lcd__sub {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  max-width: 100%;
-}
-
-.fz-lcd__time {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  min-width: 32px;
-  text-align: right;
-}
-
-/* The scrubber's own lane along the bottom of the LCD. */
-.fz-lcd__scrub {
-  grid-row: 2;
-  grid-column: 2 / span 2;
-  height: 10px;
-  display: flex;
-  align-items: center;
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease-out);
-}
-
-.fz-lcd:hover .fz-lcd__scrub,
-.fz-lcd__scrub.is-active {
-  opacity: 1;
-}
-
-.fz-lcd__empty {
-  grid-column: 1 / -1;
-  grid-row: 1 / -1;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-}
-
-/* ---------------------------------------------------------------- scrubber */
-
-.fz-scrub {
-  position: relative;
-  width: 100%;
-  height: 12px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.fz-scrub__track {
-  position: relative;
-  width: 100%;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--separator-strong);
+  background: var(--chassis);
+  color: var(--ink);
   overflow: hidden;
-  transition: height var(--dur-fast) var(--ease-out);
+  animation: fz-fp-in 260ms var(--ease-out);
+  will-change: transform;
 }
 
-.fz-scrub:hover .fz-scrub__track,
-.fz-scrub.is-dragging .fz-scrub__track {
-  height: 5px;
+@keyframes fz-fp-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
 }
 
-.fz-scrub__buffered {
+.fp.is-closing {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 220ms var(--ease),
+    transform 220ms var(--ease);
+}
+
+.fp--compact {
+  animation: fz-sheet-up 300ms var(--ease-out);
+}
+
+.fp--compact.is-closing {
+  opacity: 1;
+  transform: translateY(100%) !important;
+  transition: transform 240ms var(--ease-in);
+}
+
+.fp.is-dragging {
+  transition: none;
+}
+
+.fp:not(.is-dragging):not(.is-closing) {
+  transition: transform 260ms var(--ease-out);
+}
+
+.fp__bg {
   position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--separator-strong);
-  border-radius: inherit;
-}
-
-.fz-scrub__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--text-secondary);
-  border-radius: inherit;
-  transition: background-color var(--dur-fast) var(--ease-out);
-}
-
-.fz-scrub:hover .fz-scrub__fill,
-.fz-scrub.is-dragging .fz-scrub__fill {
-  background: var(--accent);
-}
-
-.fz-scrub__knob {
-  position: absolute;
-  top: 50%;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
-  transform: translate(-50%, -50%) scale(0);
-  transition: transform var(--dur-fast) var(--ease-spring);
+  inset: 0;
   pointer-events: none;
 }
 
-.fz-scrub:hover .fz-scrub__knob,
-.fz-scrub.is-dragging .fz-scrub__knob {
-  transform: translate(-50%, -50%) scale(1);
+.fp.is-tinted .fp__bg {
+  background:
+    radial-gradient(120% 80% at 20% 0%, color-mix(in srgb, var(--fp-glow) 26%, transparent), transparent 70%),
+    radial-gradient(100% 70% at 100% 100%, color-mix(in srgb, var(--fp-tint) 30%, transparent), transparent 70%);
+  transition: background 600ms var(--ease);
 }
 
-.fz-scrub__times {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  margin-top: 5px;
+.fp__grip {
+  position: absolute;
+  top: calc(var(--safe-top) + 6px);
+  left: 50%;
+  width: 38px;
+  height: 4px;
+  margin-left: -19px;
+  border-radius: 2px;
+  background: var(--line-3);
+  z-index: 2;
 }
 
-/* ------------------------------------------------------------------ volume */
-
-.fz-volume {
+.fp__bar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 7px;
-  width: 116px;
-  padding-left: 4px;
+  gap: 12px;
+  height: 60px;
+  padding: var(--safe-top) 14px 0;
+  flex: none;
+  box-sizing: content-box;
 }
 
-.fz-volume .fz-scrub {
-  flex: 1;
-}
-
-/* --------------------------------------------------------- full screen player */
-
-.fz-player {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
+.fp__from {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  color: #fff;
-  animation: fz-player-in var(--dur-sheet) var(--spring-smooth);
-}
-
-.fz-player.is-closing {
-  animation: fz-player-out 400ms var(--ease-in-out) forwards;
-}
-
-/*
- * The sheet slides; it deliberately does not fade.
- *
- * Animating `opacity` on this element means compositing the *entire* player —
- * three blurred gradient blobs, a grain layer, an 800px cover and a
- * backdrop-filtered dock — into an offscreen buffer for every frame of the
- * entrance. Moving it is nearly free by comparison, and the difference is
- * visible on anything short of a fast GPU.
- */
-@keyframes fz-player-in {
-  from { transform: translateY(100%); }
-  to { transform: none; }
-}
-
-@keyframes fz-player-out {
-  from { transform: none; }
-  to { transform: translateY(100%); }
-}
-
-.fz-player__chrome {
-  position: relative;
-  z-index: 5;
-  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 22px;
-  flex: none;
-}
-
-.fz-player__collapse {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  transition: transform var(--dur) var(--ease-spring), background-color var(--dur-fast) var(--ease-out);
-}
-
-.fz-player__collapse:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.fz-player__collapse:active {
-  transform: scale(0.9);
-}
-
-.fz-player__context {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.7);
-  text-transform: uppercase;
-}
-
-.fz-player__chrome-spacer {
   flex: 1;
+  min-width: 0;
+  text-align: center;
 }
 
-.fz-player__body {
+.fp__from-name {
+  max-width: 100%;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+@media (hover: hover) {
+  button.fp__from-name:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.fp__body {
   position: relative;
-  z-index: 5;
+  z-index: 1;
+  display: flex;
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  justify-items: center;
-  gap: 44px;
-  padding: 0 44px 30px;
-  transition: grid-template-columns var(--dur-slow) var(--ease-out);
+  gap: 40px;
+  padding: 0 40px 28px;
 }
 
-.fz-player__body.has-panel {
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
-  justify-items: stretch;
-}
-
-.fz-player__stage {
+.fp__main {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 26px;
-  width: 100%;
-  max-width: 420px;
-  justify-self: center;
-}
-
-.fz-player__body.has-panel .fz-player__stage {
-  justify-self: end;
-  max-width: 360px;
-}
-
-/* Artwork lifts and settles when playback starts, the way a record drops. */
-.fz-player__art {
-  width: 100%;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--artwork-shadow-lg);
-}
-
-.fz-player__art.is-playing {
-  transform: scale(1);
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7), 0 0 90px -20px var(--art-primary);
-}
-
-.fz-player__meta {
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.fz-player__meta-text {
+  align-items: stretch;
+  justify-content: center;
+  gap: 18px;
+  flex: 1 1 0;
   min-width: 0;
-  flex: 1;
+  max-width: 620px;
+  margin: 0 auto;
 }
 
-.fz-player__title {
-  font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.4px;
-  line-height: 1.2;
+.fp--wide .fp__main {
+  flex: 0 1 560px;
+  margin: 0;
 }
 
-.fz-player__artist {
-  font-size: 18px;
-  color: rgba(255, 255, 255, 0.66);
-  line-height: 1.25;
-  cursor: pointer;
-}
-
-.fz-player__artist:hover {
-  color: #fff;
-}
-
-.fz-player__scrub {
-  width: 100%;
-}
-
-.fz-player__controls {
+.fp__display {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 26px;
-  width: 100%;
-}
-
-.fz-player__controls .fz-transport__btn {
-  color: #fff;
-  width: 44px;
-  height: 44px;
-}
-
-.fz-player__controls .fz-transport__btn svg {
-  width: 26px;
-  height: 26px;
-}
-
-.fz-player__controls .fz-transport__btn--play svg {
-  width: 42px;
-  height: 42px;
-}
-
-.fz-player__extras {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-}
-
-.fz-player__extras .fz-icon-btn {
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.fz-player__extras .fz-icon-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.fz-player__extras .fz-icon-btn.is-on {
-  color: #fff;
-}
-
-.fz-player__panel {
-  position: relative;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  animation: fz-panel-in var(--dur-slow) var(--ease-out);
-  max-width: 620px;
+  transition: transform 260ms var(--ease-out);
 }
 
-@keyframes fz-panel-in {
-  from { opacity: 0; transform: translateX(28px); }
-  to { opacity: 1; transform: none; }
+.fp.is-dragging .fp__display {
+  transition: none;
 }
 
-/* -------------------------------------------------------------------- lyrics */
-
-.fz-lyrics {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  padding: 6vh 0;
-  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 82%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 82%, transparent);
-}
-
-.fz-lyrics__scroll {
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 0 8px;
-  /* The travelling highlight is positioned against this box. */
-  position: relative;
-}
-
-/*
- * One highlight for the whole sheet.
- *
- * It is measured onto the active line and slides to the next one, so the
- * rectangle behind the words is plainly the same object moving rather than a
- * background blinking off one line and on to another.
- */
-.fz-lyrics__marker {
-  position: absolute;
-  top: 0;
-  left: 0;
-  opacity: 0;
-  border-radius: 16px;
-  /*
-   * Smoked rather than frosted. A lighter pane raises the luminance right where
-   * the white text sits, so the sung line ends up with *less* contrast than the
-   * ones around it — exactly backwards. Darkening the backdrop a touch keeps it
-   * reading as glass while letting the words stay the brightest thing on screen.
-   */
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035));
+.fp__art {
+  width: min(100%, 52vh, 560px);
+  height: auto;
+  border-radius: 10px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 10px 30px rgba(0, 0, 0, 0.26);
-  backdrop-filter: blur(12px) saturate(170%) brightness(0.88);
-  -webkit-backdrop-filter: blur(12px) saturate(170%) brightness(0.88);
-  pointer-events: none;
-  z-index: 0;
-  will-change: transform, height;
-  transition:
-    transform 520ms var(--ease-emphasis),
-    height 520ms var(--ease-emphasis),
-    width 260ms var(--ease-out),
-    opacity 260ms var(--ease-out);
+    inset 0 0 0 1px var(--line),
+    0 24px 60px rgba(0, 0, 0, 0.3);
 }
 
-:root[data-glass='off'] .fz-lyrics__marker {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.fz-lyrics__scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.fz-lyric {
-  display: block;
-  width: 100%;
-  position: relative;
-  z-index: 1;
-  text-align: left;
-  font-family: var(--font-display);
-  font-size: clamp(22px, 2.5vw, 34px);
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  line-height: 1.28;
-  color: rgba(255, 255, 255, 0.32);
-  padding: 9px 14px;
-  border-radius: var(--radius-md);
-  transition: color var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out),
-    filter var(--dur-slow) var(--ease-out), opacity var(--dur-slow) var(--ease-out);
-  transform-origin: left center;
-  cursor: pointer;
-  filter: blur(0.6px);
-  opacity: 0.85;
-}
-
-/*
- * Hovering used to paint its own rectangle, which is exactly what made the
- * highlight look stuck: the pointer sits still while the song moves on. Hover
- * now only lifts the text.
- */
-@media (hover: hover) {
-  .fz-lyric:hover {
-    color: rgba(255, 255, 255, 0.62);
-  }
-
-  .fz-lyric.is-active:hover {
-    color: #fff;
-  }
-}
-
-/* The active line snaps forward: full white, slightly larger, perfectly sharp. */
-.fz-lyric.is-active {
-  color: #fff;
-  transform: scale(1.02);
-  filter: none;
-  opacity: 1;
-  text-shadow: 0 2px 30px rgba(255, 255, 255, 0.24);
-}
-
-.fz-lyric.is-past {
-  color: rgba(255, 255, 255, 0.26);
-  filter: blur(1.1px);
-  opacity: 0.6;
-}
-
-.fz-lyric.is-next {
-  color: rgba(255, 255, 255, 0.42);
-  filter: blur(0.3px);
-}
-
-.fz-lyric__original {
-  display: block;
-  font-size: 0.62em;
-  font-weight: 600;
-  color: inherit;
-  opacity: 0.55;
-  margin-top: 2px;
-  letter-spacing: -0.2px;
-}
-
-.fz-lyric__roman {
-  display: block;
-}
-
-/* Word-level karaoke fill for enhanced LRC sheets. */
-.fz-lyric__word {
-  transition: color 160ms linear, opacity 160ms linear;
-  color: rgba(255, 255, 255, 0.34);
-}
-
-.fz-lyric.is-active .fz-lyric__word.is-sung {
-  color: #fff;
-}
-
-/* The dots shown during an instrumental gap. */
-.fz-lyric-dots {
-  display: flex;
-  gap: 10px;
-  padding: 16px 14px;
-}
-
-.fz-lyric-dots span {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  animation: fz-dot-breathe 1.5s var(--ease-in-out) infinite;
-}
-
-.fz-lyric-dots span:nth-child(2) { animation-delay: 220ms; }
-.fz-lyric-dots span:nth-child(3) { animation-delay: 440ms; }
-
-@keyframes fz-dot-breathe {
-  0%, 100% { transform: scale(0.72); opacity: 0.42; }
-  50% { transform: scale(1.14); opacity: 1; }
-}
-
-/* ------------------------------------------------------------ lyrics: empty */
-
-.fz-lyrics--empty {
-  display: grid;
-  place-items: center;
-  padding: 0 24px;
-  /* The fade is there to soften scrolling text; there is none to soften here. */
-  mask-image: none;
-  -webkit-mask-image: none;
-}
-
-.fz-lyrics__empty {
-  display: grid;
-  justify-items: center;
-  gap: 7px;
-  max-width: 340px;
-  text-align: center;
-  animation: fz-scale-in 420ms var(--ease-out);
-}
-
-.fz-lyrics__empty-title {
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  color: #fff;
-}
-
-.fz-lyrics__empty-note {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.52);
-}
-
-.fz-lyrics__retry {
-  margin-top: 12px;
-}
-
-.fz-lyrics__toolbar {
+.fp__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px 10px;
-  flex: none;
-}
-
-.fz-lyrics__source {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
-  margin-left: auto;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-}
-
-.fz-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 11px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-
-.fz-chip:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-}
-
-.fz-chip.is-on {
-  background: #fff;
-  color: #000;
-  border-color: transparent;
-}
-
-.fz-chip svg {
-  width: 13px;
-  height: 13px;
-}
-
-/* --------------------------------------------------------------------- queue */
-
-.fz-queue {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0 4px;
-}
-
-.fz-queue__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px 12px;
-  flex: none;
-}
-
-.fz-queue__title {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.fz-queue__list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 0 4px 20px;
-}
-
-.fz-queue__list::-webkit-scrollbar {
-  display: none;
-}
-
-.fz-queue__section {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
-  padding: 14px 10px 6px;
-}
-
-.fz-queue-item {
-  display: grid;
-  grid-template-columns: 38px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  cursor: grab;
-  transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
-}
-
-.fz-queue-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.fz-queue-item.is-current {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.fz-queue-item.is-dragging {
-  opacity: 0.35;
-  cursor: grabbing;
-}
-
-.fz-queue-item.is-drop-target {
-  box-shadow: inset 0 2px 0 var(--accent);
-}
-
-.fz-queue-item__art {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-xs);
-}
-
-.fz-queue-item__text {
+  gap: 12px;
   min-width: 0;
 }
 
-.fz-queue-item__title {
+.fp__thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+}
+
+.fp__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.fp__title {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.fp__meta.is-small .fp__title {
+  font-size: 17px;
+}
+
+.fp__artist {
+  margin-top: 3px;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+@media (hover: hover) {
+  .fp__link:hover {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.fp__dot {
+  color: var(--ink-4);
+}
+
+.fp__heart.is-on {
+  color: var(--accent-ink);
+}
+
+.fp__scrub {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fp__times {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.fp__times .readout {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.fp__times .readout.is-hires {
+  color: var(--accent-ink);
+}
+
+.fp .transport {
+  justify-content: center;
+}
+
+.fp__utils {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.fp__flags {
+  display: none;
+}
+
+.fp__volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 200px;
+  margin-left: 8px;
+}
+
+.fp__side {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 760px;
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.fp__side-tabs {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.fp__side-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.fp__side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.fp__panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -16px;
+}
+
+.fp__panel-empty {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  color: var(--ink-3);
+}
+
+/* Phone layout. */
+.fp--compact .fp__bar {
+  height: 54px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.fp--compact .fp__body {
+  padding: 0 calc(18px + var(--safe-left)) calc(14px + var(--safe-bottom)) calc(18px + var(--safe-right));
+}
+
+.fp--compact .fp__main {
+  gap: 14px;
+  max-width: none;
+  justify-content: flex-end;
+}
+
+.fp--compact .fp__art {
+  width: min(100%, 46vh);
+  border-radius: 8px;
+}
+
+.fp--compact .fp__title {
+  font-size: 21px;
+}
+
+.fp--compact .fp__utils {
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.fp--compact .fp__volume {
+  order: -1;
+  width: 100%;
+  margin: 0;
+}
+
+.fp--compact.has-panel .fp__main {
+  justify-content: flex-start;
+}
+
+@media (max-width: 1100px) {
+  .fp--wide .fp__body {
+    gap: 24px;
+    padding: 0 24px 22px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .fp--wide .fp__flags {
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .fp--wide .fp__flags .flag.is-on {
+    color: var(--accent-ink);
+  }
+}
+
+@media (max-height: 640px) and (max-width: 899px) {
+  .fp--compact .fp__utils .fkey__label {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------- tape */
+
+.tape {
+  display: grid;
+  place-items: center;
+  width: min(100%, 560px);
+}
+
+.tape__svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.22));
+}
+
+.tape__inside {
+  fill: #141310;
+}
+
+.tape__pack {
+  fill: #3a2818;
+  stroke: #2a1c10;
+  stroke-width: 1;
+}
+
+.tape__run {
+  fill: none;
+  stroke: #3a2818;
+  stroke-width: 2;
+}
+
+.tape__hub {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fz-spin 3s linear infinite;
+}
+
+.tape__hub-face {
+  fill: #e9e9e4;
+  stroke: #b7b7b0;
+}
+
+.tape__tooth {
+  fill: #9d9d96;
+}
+
+.tape__hub-hole {
+  fill: #2a2a27;
+}
+
+.tape__shell {
+  fill: var(--panel-2);
+  stroke: var(--line-2);
+  stroke-width: 1.5;
+}
+
+:root[data-theme='dark'] .tape__shell {
+  fill: #232322;
+}
+
+.tape__window-rim {
+  fill: none;
+  stroke: var(--line-3);
+  stroke-width: 2;
+}
+
+.tape__label {
+  fill: var(--accent);
+}
+
+.tape__label-band {
+  fill: color-mix(in srgb, var(--accent) 70%, #000);
+}
+
+.tape__side {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  fill: var(--on-accent);
+  opacity: 0.85;
+}
+
+.tape__title {
+  font-family: var(--font-dot);
+  font-size: 24px;
+  font-weight: 800;
+  fill: var(--on-accent);
+}
+
+.tape__artist {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--on-accent);
+  opacity: 0.8;
+}
+
+.tape__time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--on-accent);
+}
+
+.tape__rule {
+  stroke: var(--on-accent);
+  stroke-opacity: 0.35;
+  stroke-width: 1;
+}
+
+.tape__foot {
+  fill: var(--well);
+  stroke: var(--line-2);
+}
+
+.tape__hole {
+  fill: #141310;
+}
+
+.tape__screw {
+  fill: var(--well);
+  stroke: var(--line-3);
+}
+
+.tape__screw-slot {
+  stroke: var(--line-3);
+  stroke-width: 1.2;
+}
+
+/* ----------------------------------------------------------------- lyrics */
+
+.lyrics {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.lyrics--state {
+  display: grid;
+  place-items: center;
+}
+
+.lyrics__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.lyrics__bar .chip {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+.lyrics__source {
+  margin-left: auto;
+}
+
+.lyrics__offset {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 2px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+}
+
+.lyrics__offset-value {
+  min-width: 42px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.lyrics__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
+  overscroll-behavior: contain;
+  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 86%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 86%, transparent 100%);
+}
+
+.lyrics__pad {
+  height: 30%;
+}
+
+.lyrics__pad--end {
+  height: 55%;
+}
+
+.lyric-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.lyric {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  text-align: left;
+  font-size: var(--lyric-size, 26px);
+  font-weight: 650;
+  line-height: 1.24;
+  letter-spacing: -0.015em;
+  color: var(--ink-4);
+  transition:
+    color 220ms var(--ease),
+    transform 260ms var(--ease-out),
+    opacity 220ms var(--ease);
+  transform-origin: left center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@media (hover: hover) {
+  .lyric:hover {
+    color: var(--ink-3);
+  }
+}
+
+.lyric.is-past {
+  color: var(--ink-3);
+}
+
+.lyric.is-active {
+  color: var(--ink);
+}
+
+.lyric.is-static {
+  color: var(--ink);
+  cursor: default;
+}
+
+.lyric__original {
+  display: block;
+  font-size: 0.66em;
+  font-weight: 500;
+  opacity: 0.72;
+  margin-bottom: 2px;
+}
+
+.lyric__roman {
+  display: block;
+}
+
+.lyric__word {
+  transition: color 120ms linear;
+}
+
+.lyric.is-active .lyric__word {
+  color: var(--ink-3);
+}
+
+.lyric.is-active .lyric__word.is-sung {
+  color: var(--ink);
+}
+
+.lyric-gap {
+  min-height: 16px;
+}
+
+.lyric-dots {
+  display: flex;
+  gap: 8px;
+  padding: 12px 12px;
+}
+
+.lyric-dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: fz-pulse 1.2s ease-in-out infinite;
+}
+
+.lyric-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.lyric-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.lyrics--full.lyrics--s {
+  --lyric-size: 20px;
+}
+.lyrics--full.lyrics--m {
+  --lyric-size: 27px;
+}
+.lyrics--full.lyrics--l {
+  --lyric-size: 36px;
+}
+.lyrics--panel.lyrics--s {
+  --lyric-size: 15px;
+}
+.lyrics--panel.lyrics--m {
+  --lyric-size: 18px;
+}
+.lyrics--panel.lyrics--l {
+  --lyric-size: 23px;
+}
+
+.lyrics--panel .lyrics__scroll {
+  padding: 0 10px;
+}
+
+.lyrics--panel .lyrics__bar {
+  padding: 8px 12px;
+}
+
+.fp--compact .lyrics__bar {
+  border-bottom: 0;
+}
+
+.fp--compact .lyrics--full.lyrics--m {
+  --lyric-size: 24px;
+}
+
+.fp--compact .lyrics--full.lyrics--l {
+  --lyric-size: 30px;
+}
+
+.lyrics__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  padding: 24px;
+  text-align: center;
+}
+
+.lyrics__empty-title {
+  font-family: var(--font-dot);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--ink-2);
+}
+
+.lyrics__empty-note {
   font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.lyrics__empty-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------------------ queue */
+
+.queue {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.queue.is-drop {
+  background: var(--accent-soft);
+}
+
+.queue__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 10px 8px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.queue__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.queue__head .chip {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+.queue__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px 24px;
+  overscroll-behavior: contain;
+}
+
+.queue__section + .queue__section {
+  margin-top: 6px;
+}
+
+.queue__label {
+  padding: 10px 8px 6px;
+}
+
+.queue__from {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+
+.queue__list.is-reordering .qslot,
+.queue__list.is-reordering .swipe {
+  transition: transform 160ms var(--ease-out);
+}
+
+.queue__empty {
+  padding: 18px 10px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.queue__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 38px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--ink-3);
+}
+
+@media (hover: hover) {
+  .queue__toggle:hover {
+    background: var(--hover);
+  }
+}
+
+.queue__toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.qrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Rows sit straight on the tinted full player; only a row being swiped is solid. */
+.fp .swipe__content.is-moved {
+  background: var(--chassis);
+}
+
+@media (hover: hover) {
+  .qrow:hover {
+    background: var(--hover);
+  }
+}
+
+.qrow.is-current .qrow__title {
+  color: var(--accent-ink);
+}
+
+.qrow.is-dim {
+  opacity: 0.55;
+}
+
+.qrow.is-lifted {
+  background: var(--panel-2);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.22),
+    0 0 0 1px var(--line-2);
+}
+
+.qrow__art-wrap {
+  position: relative;
+  flex: none;
+}
+
+.qrow__art {
+  width: 40px;
+  height: 40px;
+  border-radius: 5px;
+}
+
+.qrow__eq {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(10, 10, 10, 0.5);
+}
+
+.qrow__eq .eq > span {
+  background: #fff;
+}
+
+.qrow__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.qrow__title {
+  font-size: 13.5px;
   font-weight: 500;
 }
 
-.fz-queue-item__sub {
-  font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.55);
+.qrow__sub {
+  font-size: 12px;
+  color: var(--ink-2);
 }
 
-.fz-queue-item__handle {
+.qrow__time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  flex: none;
+}
+
+.qrow__remove {
   opacity: 0;
-  color: rgba(255, 255, 255, 0.5);
-  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
-.fz-queue-item:hover .fz-queue-item__handle {
-  opacity: 1;
+.qrow__slot {
+  width: 26px;
+  flex: none;
 }
 
-/* ---------------------------------------------------- narrow full-screen player */
+.qrow__slot--grip {
+  width: 28px;
+}
 
-@media (max-width: 1080px) {
-  .fz-player__body.has-panel {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 20px;
-    padding: 0 20px 20px;
-  }
-
-  .fz-player__body.has-panel .fz-player__stage {
-    justify-self: center;
-    max-width: 260px;
-  }
-
-  .fz-player__body.has-panel .fz-player__art {
-    max-width: 190px;
-    margin: 0 auto;
+@media (hover: hover) {
+  .qrow:hover .qrow__remove {
+    opacity: 1;
   }
 }
 
-/*
- * Between 900px (where the compact shell takes over) and about 1100px the
- * capsule has to give something up. The time readout and the volume slider go
- * first: both have keyboard and menu equivalents, and neither is worth
- * crushing the title into an ellipsis for.
- */
-@media (max-width: 1100px) {
-  .fz-bar {
-    grid-template-columns: minmax(150px, 1fr) minmax(250px, 380px) minmax(150px, 1fr);
-  }
-
-  .fz-lcd__time {
-    display: none;
-  }
-
-  .fz-volume .fz-scrub {
-    display: none;
-  }
-}
-
-@media (max-width: 700px) {
-  .fz-player__body {
-    padding: 0 20px 16px;
-    gap: 20px;
-  }
-
-  .fz-player__controls {
-    gap: 18px;
-  }
-
-  .fz-volume {
-    display: none;
-  }
-}
-
-/* The queue grip is a drag target, so it must never start a scroll. */
-.fz-queue-item__grip {
+.qrow__grip {
   display: grid;
   place-items: center;
-  width: var(--tap);
-  height: var(--tap);
-  color: rgba(255, 255, 255, 0.45);
-  cursor: grab;
-  touch-action: none;
-}
-
-.fz-queue-item__grip:active {
-  cursor: grabbing;
-  color: #fff;
-}
-
-/* Keeps the swapping artwork from disturbing the LCD's grid. */
-.fz-lcd__art-wrap {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 32px;
+  color: var(--ink-3);
   flex: none;
+}
+
+.qrow__grip svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* ---------------------------------------------------------- spec sheet */
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.details__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.details__art {
+  width: 84px;
+  height: 84px;
+  border-radius: 6px;
+}
+
+.details--compact .details__art {
+  width: 64px;
+  height: 64px;
+}
+
+.details__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.details__title {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.details__sub {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.details__tags {
+  display: flex;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.details__rating {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.spec {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.spec__row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.spec__row dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.details__keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

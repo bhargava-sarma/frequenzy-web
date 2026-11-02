@@ -1,268 +1,302 @@
 /**
- * Album / artist / playlist cards, plus the horizontally scrolling shelf.
+ * Album, artist and playlist cards, coloured tiles, and the shelf that
+ * scrolls them sideways.
  *
- * Every card carries its own colour. The palette is lifted from the cover as
- * the card nears the viewport and published as `--card-glow` / `--card-deep`,
- * so a red record throws a red shadow and a blue one a blue shadow — which is
- * most of why a wall of Apple Music covers looks alive rather than like a
- * spreadsheet of thumbnails.
+ * A card opens on click, plays from the key in its corner, offers its menu on
+ * right-click or long-press, prefetches its page on hover so opening it is
+ * instant, and can be dragged onto a playlist.
  */
 
-import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { Artwork } from './Artwork';
-import { useContextMenu } from './ContextMenu';
-import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from './Icons';
+import { ChevronLeftIcon, ChevronRightIcon, EllipsisIcon, PlayIcon } from './Icons';
+import { endDrag, startDrag } from '../lib/dnd';
 import { albumArtist, formatCount } from '../lib/format';
-import { getAlbum } from '../lib/subsonic';
+import { navigate } from '../lib/nav';
+import { prefetchAlbum, prefetchArtist, prefetchPlaylist } from '../lib/queries';
+import { artistCover } from '../lib/song';
 import type { Album, Artist, Playlist } from '../lib/types';
-import { useDialogs } from '../state/dialogs';
-import { usePlayer } from '../state/player';
-import { useGlassPointer } from '../hooks/useGlassPointer';
 import { useIsTouch } from '../hooks/useLayout';
-import { useMediaMenu } from '../hooks/useMediaMenu';
-import { usePalette } from '../hooks/usePalette';
-import { MORPH_NAME, morphFrom, useSmoothNavigate } from '../hooks/useSmoothNavigate';
+import { useItemMenu } from '../hooks/useItemMenu';
+import * as act from '../state/actions';
+import {
+  albumHeader, albumMenu, artistHeader, artistMenu, playlistHeader, playlistMenu,
+} from '../state/menus';
 
-/* --------------------------------------------------------------------- shelf */
+const CARD_ART = 200;
 
-export function Shelf({ title, link, onLink, children, wide }: {
-  title: string;
-  link?: string;
-  onLink?: () => void;
-  children: ReactNode;
-  wide?: boolean;
-}) {
-  const scroller = useRef<HTMLDivElement | null>(null);
-  const [atStart, setAtStart] = useState(true);
-  const [atEnd, setAtEnd] = useState(false);
+/* --------------------------------------------------------------- the frame */
 
-  const updateEdges = () => {
-    const el = scroller.current;
-    if (!el) return;
-    setAtStart(el.scrollLeft < 8);
-    setAtEnd(el.scrollLeft + el.clientWidth > el.scrollWidth - 8);
-  };
-
-  const scrollBy = (direction: 1 | -1) => {
-    const el = scroller.current;
-    if (!el) return;
-    el.scrollBy({ left: direction * el.clientWidth * 0.82, behavior: 'smooth' });
-  };
-
-  return (
-    <section className="fz-section">
-      <div className="fz-section__head">
-        <h2 className="fz-section__title">{title}</h2>
-        {link && (
-          <button type="button" className="fz-section__link" onClick={onLink}>
-            {link}
-          </button>
-        )}
-        <div className="fz-section__arrows">
-          <button type="button" className="fz-icon-btn" aria-label="Scroll left" disabled={atStart} onClick={() => scrollBy(-1)}>
-            <ChevronLeftIcon />
-          </button>
-          <button type="button" className="fz-icon-btn" aria-label="Scroll right" disabled={atEnd} onClick={() => scrollBy(1)}>
-            <ChevronRightIcon />
-          </button>
-        </div>
-      </div>
-      <div
-        className={`fz-hscroll fz-shelf-scroll ${atStart ? 'is-at-start' : ''} ${atEnd ? 'is-at-end' : ''}`}
-        ref={scroller}
-        onScroll={updateEdges}
-      >
-        <div className={`fz-shelf fz-stagger ${wide ? 'fz-shelf--wide' : ''}`}>{children}</div>
-      </div>
-    </section>
-  );
+interface CardFrameProps {
+  onOpen: () => void;
+  onPlay?: () => void;
+  onPrefetch?: () => void;
+  menu: ReturnType<typeof useItemMenu>;
+  drag?: Parameters<typeof startDrag>[1];
+  className?: string;
+  label: string;
+  art: ReactNode;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  round?: boolean;
 }
 
-/* ----------------------------------------------------------------- the frame */
-
-/**
- * The shared shell: colour extraction, the lean toward the cursor, and the
- * morph hand-off. A card is a card whatever it holds.
- */
-function CardFrame({
-  coverArt, onOpen, onContextMenu, children, className = '',
-}: {
-  coverArt?: string;
-  onOpen: (art: HTMLElement | null) => void;
-  onContextMenu?: (event: MouseEvent) => void;
-  children: (artRef: (node: HTMLDivElement | null) => void) => ReactNode;
-  className?: string;
-}) {
+function CardFrame({ onOpen, onPlay, onPrefetch, menu, drag, className = '', label, art, title, subtitle, round }: CardFrameProps) {
   const touch = useIsTouch();
-  const { palette, ref: paletteRef } = usePalette(coverArt);
-  // A finger has no hover, so the lean would only ever fire on tap.
-  const glass = useGlassPointer<HTMLDivElement>({ tilt: touch ? 0 : 3 });
-  const art = useRef<HTMLDivElement | null>(null);
-
-  const setCard = (node: HTMLDivElement | null) => {
-    glass.ref.current = node;
-    paletteRef(node);
-  };
-
   return (
     <div
-      ref={setCard}
-      className={`fz-card ${className}`}
-      role="button"
+      className={`card ${round ? 'card--round' : ''} ${className}`}
+      role="link"
       tabIndex={0}
-      style={{
-        ['--card-glow' as string]: palette.glow,
-        ['--card-deep' as string]: palette.darkVibrant,
+      aria-label={label}
+      draggable={!touch && drag !== undefined}
+      onDragStart={drag ? (event) => startDrag(event, drag) : undefined}
+      onDragEnd={endDrag}
+      onClick={() => {
+        if (menu.consumeClick()) return;
+        onOpen();
       }}
-      onPointerMove={touch ? undefined : glass.onPointerMove}
-      onPointerLeave={touch ? undefined : glass.onPointerLeave}
-      onClick={() => onOpen(art.current)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') onOpen(art.current);
+        if (event.key === 'Enter') onOpen();
       }}
-      onContextMenu={onContextMenu}
+      onPointerEnter={onPrefetch}
+      onFocus={onPrefetch}
+      {...menu.handlers}
     >
-      {children((node) => {
-        art.current = node;
-      })}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- album card */
-
-export function AlbumCard({ album, subtitle }: { album: Album; subtitle?: string }) {
-  const navigate = useSmoothNavigate();
-  const { actions } = usePlayer();
-  const { addToPlaylist } = useDialogs();
-  const { albumMenu } = useMediaMenu();
-  const { open, menu } = useContextMenu();
-
-  /** Album lists come back without tracks, so fetch them at the moment of play. */
-  const loadSongs = async () => {
-    const full = await getAlbum(album.id);
-    return full.song ?? [];
-  };
-
-  const handlePlay = async (event: MouseEvent) => {
-    event.stopPropagation();
-    const songs = await loadSongs();
-    if (songs.length) actions.playQueue(songs, 0, { kind: 'Album', name: album.name, id: album.id });
-  };
-
-  const handleMenu = async (event: MouseEvent) => {
-    event.preventDefault();
-    const songs = await loadSongs();
-    open(event, albumMenu(album, songs, addToPlaylist));
-  };
-
-  return (
-    <>
-      <CardFrame
-        coverArt={album.coverArt}
-        onContextMenu={(event) => void handleMenu(event)}
-        onOpen={(art) => {
-          // Hand the cover to the next screen so it flies rather than blinks.
-          morphFrom(art);
-          navigate(`/album/${encodeURIComponent(album.id)}`);
-        }}
-      >
-        {(artRef) => (
+      <div className="card__art-wrap">
+        {art}
+        {!touch && (
           <>
-            <Artwork ref={artRef} coverArt={album.coverArt} name={album.name} size={400} className="fz-card__art">
+            {onPlay && (
               <button
                 type="button"
-                className="fz-play-overlay"
-                aria-label={`Play ${album.name}`}
-                onClick={(event) => void handlePlay(event)}
+                className="card__play"
+                aria-label={`Play ${label}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPlay();
+                }}
               >
                 <PlayIcon />
               </button>
-            </Artwork>
-            <div className="fz-card__meta">
-              <div className="fz-card__title fz-clamp-2">{album.name}</div>
-              <div className="fz-card__subtitle fz-truncate">{subtitle ?? albumArtist(album)}</div>
-            </div>
+            )}
+            <button
+              type="button"
+              className="card__more"
+              aria-label={`More for ${label}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                menu.openFrom(event.currentTarget);
+              }}
+            >
+              <EllipsisIcon />
+            </button>
           </>
         )}
-      </CardFrame>
-      {menu}
-    </>
-  );
-}
-
-/* --------------------------------------------------------------- artist card */
-
-export function ArtistCard({ artist }: { artist: Artist }) {
-  const navigate = useSmoothNavigate();
-  const { artistMenu } = useMediaMenu();
-  const { open, menu } = useContextMenu();
-  const cover = artist.coverArt ?? artist.id;
-
-  return (
-    <>
-      <CardFrame
-        coverArt={cover}
-        className="fz-card--round"
-        onContextMenu={(event) => open(event, artistMenu(artist))}
-        onOpen={(art) => {
-          morphFrom(art);
-          navigate(`/artist/${encodeURIComponent(artist.id)}`);
-        }}
-      >
-        {(artRef) => (
-          <>
-            <Artwork ref={artRef} coverArt={cover} name={artist.name} size={400} rounded className="fz-card__art" />
-            <div className="fz-card__meta fz-card__meta--center">
-              <div className="fz-card__title fz-truncate">{artist.name}</div>
-              <div className="fz-card__subtitle fz-truncate">{formatCount(artist.albumCount, 'album')}</div>
-            </div>
-          </>
-        )}
-      </CardFrame>
-      {menu}
-    </>
-  );
-}
-
-/* ------------------------------------------------------------- playlist card */
-
-export function PlaylistCard({ playlist }: { playlist: Playlist }) {
-  const navigate = useSmoothNavigate();
-  return (
-    <CardFrame
-      coverArt={playlist.coverArt}
-      onOpen={(art) => {
-        morphFrom(art);
-        navigate(`/playlist/${encodeURIComponent(playlist.id)}`);
-      }}
-    >
-      {(artRef) => (
-        <>
-          <Artwork ref={artRef} coverArt={playlist.coverArt} name={playlist.name} size={400} className="fz-card__art" />
-          <div className="fz-card__meta">
-            <div className="fz-card__title fz-clamp-2">{playlist.name}</div>
-            <div className="fz-card__subtitle fz-truncate">{formatCount(playlist.songCount, 'song')}</div>
-          </div>
-        </>
-      )}
-    </CardFrame>
-  );
-}
-
-/* ------------------------------------------------------------------ skeleton */
-
-export function CardSkeleton({ rounded }: { rounded?: boolean }) {
-  return (
-    <div className="fz-card" aria-hidden="true">
-      <div className="fz-skeleton" style={{ aspectRatio: '1', borderRadius: rounded ? '50%' : 'var(--radius-md)' }} />
-      <div className="fz-card__meta">
-        <div className="fz-skeleton" style={{ height: 11, width: '78%', marginBottom: 6 }} />
-        <div className="fz-skeleton" style={{ height: 10, width: '52%' }} />
+      </div>
+      <div className="card__meta">
+        <div className={`card__title ${round ? 'truncate' : 'clamp-2'}`}>{title}</div>
+        {subtitle && <div className="card__sub truncate">{subtitle}</div>}
       </div>
     </div>
   );
 }
 
-export { MORPH_NAME };
+/* ------------------------------------------------------------------ cards */
+
+export const AlbumCard = memo(function AlbumCard({ album, subtitle }: { album: Album; subtitle?: string }) {
+  const menu = useItemMenu(() => ({ entries: albumMenu(album), header: albumHeader(album) }));
+  const id = encodeURIComponent(album.id);
+  return (
+    <CardFrame
+      label={album.name}
+      menu={menu}
+      drag={{ kind: 'album', album }}
+      onOpen={() => navigate(`/album/${id}`)}
+      onPlay={() => void act.playAlbum(album)}
+      onPrefetch={() => prefetchAlbum(album.id)}
+      art={<Artwork coverArt={album.coverArt} name={album.name} size={CARD_ART} className="card__art" />}
+      title={album.name}
+      subtitle={subtitle ?? albumArtist(album)}
+    />
+  );
+});
+
+export const ArtistCard = memo(function ArtistCard({ artist, subtitle }: { artist: Artist; subtitle?: string }) {
+  const menu = useItemMenu(() => ({ entries: artistMenu(artist), header: artistHeader(artist) }));
+  const id = encodeURIComponent(artist.id);
+  return (
+    <CardFrame
+      round
+      label={artist.name}
+      menu={menu}
+      drag={{ kind: 'artist', artist }}
+      onOpen={() => navigate(`/artist/${id}`)}
+      onPlay={() => void act.playArtist(artist, { shuffle: true })}
+      onPrefetch={() => prefetchArtist(artist.id)}
+      art={<Artwork coverArt={artistCover(artist)} name={artist.name} size={CARD_ART} round className="card__art" />}
+      title={artist.name}
+      subtitle={subtitle ?? (artist.albumCount !== undefined ? formatCount(artist.albumCount, 'album') : undefined)}
+    />
+  );
+});
+
+export const PlaylistCard = memo(function PlaylistCard({ playlist }: { playlist: Playlist }) {
+  const menu = useItemMenu(() => ({ entries: playlistMenu(playlist), header: playlistHeader(playlist) }));
+  const id = encodeURIComponent(playlist.id);
+  return (
+    <CardFrame
+      label={playlist.name}
+      menu={menu}
+      drag={{ kind: 'playlist', playlist }}
+      onOpen={() => navigate(`/playlist/${id}`)}
+      onPlay={() => void act.playPlaylist(playlist)}
+      onPrefetch={() => prefetchPlaylist(playlist.id)}
+      art={<Artwork coverArt={playlist.coverArt} name={playlist.name} size={CARD_ART} className="card__art" />}
+      title={playlist.name}
+      subtitle={formatCount(playlist.songCount, 'song')}
+    />
+  );
+});
+
+export function CardSkeleton({ round }: { round?: boolean }) {
+  return (
+    <div className={`card card--skeleton ${round ? 'card--round' : ''}`} aria-hidden="true">
+      <div className="card__art-wrap">
+        <div className="skeleton card__art" />
+      </div>
+      <div className="card__meta">
+        <div className="skeleton" style={{ height: 12, width: '76%', marginBottom: 7 }} />
+        <div className="skeleton" style={{ height: 10, width: '48%' }} />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ tiles */
+
+const TILE_COLOURS = ['orange', 'blue', 'green', 'yellow', 'grey', 'red', 'pink', 'ink'] as const;
+
+export function tileColour(seed: string): (typeof TILE_COLOURS)[number] {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  return TILE_COLOURS[Math.abs(hash) % TILE_COLOURS.length];
+}
+
+/** A coloured square for genres, stations and other things without artwork. */
+export function Tile({
+  title, subtitle, index, icon, colour, onClick, onPlay, style,
+}: {
+  title: string;
+  subtitle?: string;
+  index?: number;
+  icon?: ReactNode;
+  colour?: (typeof TILE_COLOURS)[number];
+  onClick: () => void;
+  onPlay?: () => void;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`tile tile--${colour ?? tileColour(title)}`}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      style={style}
+    >
+      <div className="tile__top">
+        {index !== undefined && <span className="tile__index">{String(index).padStart(2, '0')}</span>}
+        {icon && <span className="tile__icon">{icon}</span>}
+      </div>
+      <div className="tile__bottom">
+        <div className="tile__title clamp-2">{title}</div>
+        {subtitle && <div className="tile__sub truncate">{subtitle}</div>}
+      </div>
+      {onPlay && (
+        <button
+          type="button"
+          className="tile__play"
+          aria-label={`Play ${title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPlay();
+          }}
+        >
+          <PlayIcon />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ shelf */
+
+/** A row of cards that scrolls sideways, with page keys on a desktop. */
+export function Shelf({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ start: true, end: true });
+  const touch = useIsTouch();
+
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.scrollLeft < 4;
+    const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
+    setEdges((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => observer.disconnect();
+  }, [measure, children]);
+
+  const page = (direction: 1 | -1) => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.85, behavior: 'smooth' });
+  };
+
+  return (
+    <div className={`shelf ${edges.start ? 'is-start' : ''} ${edges.end ? 'is-end' : ''} ${className}`}>
+      <div className="shelf__scroll" ref={ref} onScroll={measure}>
+        <div className="shelf__track">{children}</div>
+      </div>
+      {!touch && !edges.start && (
+        <button type="button" className="shelf__key shelf__key--prev" aria-label="Scroll left" onClick={() => page(-1)}>
+          <ChevronLeftIcon />
+        </button>
+      )}
+      {!touch && !edges.end && (
+        <button type="button" className="shelf__key shelf__key--next" aria-label="Scroll right" onClick={() => page(1)}>
+          <ChevronRightIcon />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function Grid({ children, tight, className = '' }: { children: ReactNode; tight?: boolean; className?: string }) {
+  return <div className={`grid ${tight ? 'grid--tight' : ''} ${className}`}>{children}</div>;
+}
+
+export function SkeletonCards({ count = 8, round }: { count?: number; round?: boolean }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <CardSkeleton key={i} round={round} />
+      ))}
+    </>
+  );
+}

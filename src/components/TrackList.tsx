@@ -1,518 +1,777 @@
 /**
- * The song row, used by every list in the app.
+ * The song list, used by every page that lists songs.
  *
- * It adapts to the device rather than pretending they are the same: on desktop
- * rows reveal actions on hover and support click/shift/cmd selection with a
- * batch toolbar; on touch they are swiped left to play next, right to add to
- * the queue, and long-pressed for the full menu.
+ * Rows are a fixed height, which buys three things: long lists render only
+ * what is on screen, drag-to-reorder is arithmetic rather than hit-testing,
+ * and nothing ever jumps when artwork loads.
+ *
+ * Desktop: click selects, ⇧-click extends, ⌘/Ctrl-click toggles, double-click
+ * plays, arrows move, Enter plays; rows drag onto playlists in the sidebar.
+ * Touch: tap plays, swipe for quick actions, long-press for everything, and
+ * "select" in that menu for picking several.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import {
+  memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type DragEvent,
+  type KeyboardEvent, type MouseEvent, type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import { Artwork } from './Artwork';
-import { useContextMenu } from './ContextMenu';
+import { Eq } from './controls';
 import {
-  AddToQueueIcon, CheckIcon, CloseIcon, EllipsisIcon, GripIcon, HeartIcon, PlayIcon,
-  PlayNextIcon, PlusIcon, TrashIcon,
+  AddToQueueIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, CloseIcon, DownloadIcon, EllipsisIcon, GripIcon,
+  HeartIcon, PlayIcon, PlayNextIcon, PlusIcon, TrashIcon,
 } from './Icons';
-import { SwipeableRow, type SwipeAction } from './SwipeableRow';
+import { SwipeRow, type SwipeAction } from './SwipeRow';
+import { endDrag, startDrag } from '../lib/dnd';
+import { isDownloaded, subscribeDownloads } from '../lib/downloads';
 import { formatTime, qualityBadge, songArtist } from '../lib/format';
 import type { Song } from '../lib/types';
-import { useDragReorder, useLongPress } from '../hooks/useGestures';
+import { useLongPress, useReorder } from '../hooks/useGestures';
 import { useIsCompact, useIsTouch } from '../hooks/useLayout';
-import { useMediaMenu } from '../hooks/useMediaMenu';
-import { useDialogs } from '../state/dialogs';
-import { useLibrary } from '../state/library';
+import { useScroller, useVirtualRows } from '../hooks/useScroller';
+import * as act from '../state/actions';
+import { useIsStarred } from '../state/library';
+import { selectionMenu, songHeader, songMenu } from '../state/menus';
 import { usePlayer, type PlaybackContextInfo } from '../state/player';
-import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
+import { useSetting } from '../state/settings';
+import { ui } from '../state/ui';
+
+export type SortKey = 'index' | 'title' | 'artist' | 'album' | 'duration' | 'plays' | 'year';
 
 interface TrackListProps {
   songs: Song[];
   context?: PlaybackContextInfo;
-  /** Album views number tracks; playlists and search show artwork instead. */
-  variant?: 'numbered' | 'artwork';
+  /** 'album' numbers rows by track and drops the artwork. */
+  variant?: 'album' | 'default';
   showAlbum?: boolean;
-  playlist?: { id: string };
-  emptyMessage?: string;
-  /** Enables the drag grips that reorder a playlist. */
+  showPlays?: boolean;
+  /** Column headers that sort the list in place (desktop). */
+  sortable?: boolean;
+  /** Removal from whatever this list is (a playlist, the history, downloads). */
+  onRemove?: (indices: number[]) => void;
+  removeLabel?: string;
+  /** Drag grips; indices are positions in `songs`. */
   onReorder?: (from: number, to: number) => void;
-  /** Playlists offer a "remove from this playlist" swipe; other lists do not. */
-  onRemove?: (index: number) => void;
+  /** For the song menu's "remove from playlist". */
+  playlistId?: string;
+  emptyText?: ReactNode;
+  /** Album artist, so album rows only print a track's artist when it differs. */
+  albumArtistName?: string;
+  /**
+   * What playing a row should queue, when it is more than this list — one
+   * disc of an album queues the whole album, from that track.
+   */
+  queue?: { songs: Song[]; offset: number };
+}
+
+/** One place that decides how tall a row is, so CSS and arithmetic agree. */
+export function useRowHeight(variant: 'album' | 'default'): number {
+  const compact = useIsCompact();
+  const density = useSetting('density');
+  const tight = density === 'compact';
+  if (variant === 'album') return compact ? (tight ? 48 : 54) : tight ? 38 : 44;
+  return compact ? (tight ? 54 : 62) : tight ? 44 : 52;
+}
+
+const VIRTUAL_AFTER = 120;
+
+function useIsDownloaded(id: string): boolean {
+  return useSyncExternalStore(
+    subscribeDownloads,
+    () => isDownloaded(id),
+    () => isDownloaded(id),
+  );
+}
+
+function compareText(a: string | undefined, b: string | undefined): number {
+  return (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base', numeric: true });
 }
 
 export function TrackList({
-  songs,
-  context,
-  variant = 'artwork',
-  showAlbum = true,
-  playlist,
-  emptyMessage,
-  onReorder,
-  onRemove,
+  songs, context, variant = 'default', showAlbum = true, showPlays = false, sortable = false, onRemove,
+  removeLabel = 'remove', onReorder, playlistId, emptyText, albumArtistName, queue,
 }: TrackListProps) {
-  const { current, playing, actions } = usePlayer();
-  const { isStarred, toggleStar } = useLibrary();
-  const { addToPlaylist, showTrackInfo } = useDialogs();
-  const { songMenu } = useMediaMenu();
-  const { open, openAt, openAtPoint, menu } = useContextMenu();
-  const navigate = useSmoothNavigate();
   const compact = useIsCompact();
   const touch = useIsTouch();
+  const scroller = useScroller();
+  const scrollerRef = useRef<HTMLElement | null>(scroller);
+  scrollerRef.current = scroller;
+  const rowHeight = useRowHeight(variant);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const [selection, setSelection] = useState<Set<number>>(() => new Set());
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'index', dir: 1 });
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [selecting, setSelecting] = useState(false);
   const [openSwipe, setOpenSwipe] = useState<{ index: number; side: 'left' | 'right' } | null>(null);
   const anchor = useRef<number | null>(null);
+  const gripDown = useRef(false);
 
-  const reorder = useDragReorder({ onReorder: onReorder ?? (() => {}), disabled: !onReorder });
+  // Sorting is display-only; `order[i]` is the position in `songs` of row i.
+  const order = useMemo(() => {
+    const indices = songs.map((_, i) => i);
+    if (!sortable || sort.key === 'index') return sort.dir === 1 ? indices : indices.reverse();
+    const by: Record<Exclude<SortKey, 'index'>, (a: Song, b: Song) => number> = {
+      title: (a, b) => compareText(a.title, b.title),
+      artist: (a, b) => compareText(songArtist(a), songArtist(b)),
+      album: (a, b) => compareText(a.album, b.album) || (a.track ?? 0) - (b.track ?? 0),
+      duration: (a, b) => (a.duration ?? 0) - (b.duration ?? 0),
+      plays: (a, b) => (a.playCount ?? 0) - (b.playCount ?? 0),
+      year: (a, b) => (a.year ?? 0) - (b.year ?? 0),
+    };
+    const compare = by[sort.key];
+    return indices.sort((x, y) => compare(songs[x], songs[y]) * sort.dir || x - y);
+  }, [songs, sort, sortable]);
 
-  // Selection is scoped to the list as rendered; a new list means a fresh start.
+  const shown = useMemo(() => order.map((i) => songs[i]), [order, songs]);
+
+  // A different list is a fresh start for the selection.
+  const signature = useMemo(() => songs.map((s) => s.id).join('|'), [songs]);
   useEffect(() => {
-    setSelection(new Set());
+    setSelected(new Set());
+    setSelecting(false);
     anchor.current = null;
-  }, [songs]);
+  }, [signature, sort]);
+
+  const reorderEnabled = Boolean(onReorder) && sort.key === 'index' && sort.dir === 1;
+  const reorder = useReorder({
+    count: shown.length,
+    rowHeight,
+    scroller: scrollerRef,
+    enabled: reorderEnabled,
+    onReorder: (from, to) => onReorder?.(from, to),
+  });
+
+  const virtual = shown.length > VIRTUAL_AFTER && !reorder.state;
+  const range = useVirtualRows(shown.length, rowHeight, listRef, virtual);
+
+  /* ------------------------------------------------------------ selection */
+
+  const selectedSongs = useMemo(
+    () => [...selected].sort((a, b) => a - b).map((i) => shown[i]).filter(Boolean),
+    [selected, shown],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+    setSelecting(false);
+    anchor.current = null;
+  }, []);
 
   useEffect(() => {
-    if (selection.size === 0) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelection(new Set());
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
+        // Only the list the pointer or focus is in takes ⌘A.
+        if (!listRef.current) return;
+        if (!listRef.current.matches(':hover') && !listRef.current.contains(document.activeElement)) return;
         event.preventDefault();
-        setSelection(new Set(songs.map((_, i) => i)));
+        setSelected(new Set(shown.map((_, i) => i)));
+      } else if (event.key === 'Escape' && selected.size > 0) {
+        clearSelection();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selection.size, songs]);
+  }, [clearSelection, selected.size, shown]);
 
-  const selectedSongs = useMemo(
-    () => [...selection].sort((a, b) => a - b).map((i) => songs[i]).filter(Boolean),
-    [selection, songs],
+  const toggle = useCallback((row: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(row)) next.delete(row);
+      else next.add(row);
+      return next;
+    });
+    anchor.current = row;
+  }, []);
+
+  /* --------------------------------------------------------------- actions */
+
+  const play = useCallback(
+    (row: number) => {
+      if (queue) act.playSongs(queue.songs, queue.offset + order[row], context);
+      else act.playSongs(shown, row, context);
+    },
+    [context, order, queue, shown],
   );
 
-  const buildMenu = useCallback(
-    (song: Song, index: number) =>
-      songMenu(song, {
-        playlist: playlist ? { id: playlist.id, index } : undefined,
-        onRequestAddToPlaylist: addToPlaylist,
-        onShowInfo: showTrackInfo,
-        context,
-      }),
-    [addToPlaylist, context, playlist, showTrackInfo, songMenu],
-  );
+  const latest = useRef({ selected, selecting, compact, touch, play, toggle });
+  latest.current = { selected, selecting, compact, touch, play, toggle };
 
-  const handleRowClick = (event: MouseEvent, index: number) => {
-    if (compact) {
-      actions.playQueue(songs, index, context);
+  const onRowClick = useCallback((row: number, event: MouseEvent) => {
+    const { selected: sel, selecting: picking, touch: isTouch, play: playRow, toggle: toggleRow } = latest.current;
+    if (picking) {
+      toggleRow(row);
+      return;
+    }
+    if (isTouch) {
+      playRow(row);
       return;
     }
     if (event.shiftKey && anchor.current !== null) {
-      const [from, to] = [anchor.current, index].sort((a, b) => a - b);
-      const next = new Set(selection);
+      const [from, to] = [anchor.current, row].sort((a, b) => a - b);
+      const next = new Set(sel);
       for (let i = from; i <= to; i++) next.add(i);
-      setSelection(next);
+      setSelected(next);
       return;
     }
     if (event.metaKey || event.ctrlKey) {
-      const next = new Set(selection);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      setSelection(next);
-      anchor.current = index;
+      toggleRow(row);
       return;
     }
-    setSelection(new Set([index]));
-    anchor.current = index;
-  };
+    setSelected(new Set([row]));
+    anchor.current = row;
+  }, []);
+
+  const removeRows = useCallback(
+    (rows: number[]) => {
+      if (!onRemove) return;
+      onRemove(rows.map((row) => order[row]).sort((a, b) => b - a));
+      clearSelection();
+    },
+    [clearSelection, onRemove, order],
+  );
+
+  const menuFor = useCallback(
+    (row: number) => {
+      const song = shown[row];
+      return songMenu(song, {
+        list: queue ? queue.songs : shown,
+        index: queue ? queue.offset + order[row] : row,
+        context,
+        playlist: playlistId && onRemove ? { id: playlistId, index: order[row], onRemove: () => removeRows([row]) } : undefined,
+        // A mouse has ⌘-click; a finger needs a way in.
+        onSelect: latest.current.touch
+          ? () => {
+              setSelecting(true);
+              setSelected(new Set([row]));
+            }
+          : undefined,
+      });
+    },
+    [context, onRemove, order, playlistId, queue, removeRows, shown],
+  );
+
+  const openMenu = useCallback(
+    (row: number, at: { x: number; y: number } | Element) => {
+      const sel = latest.current.selected;
+      if (sel.size > 1 && sel.has(row)) {
+        const rows = [...sel];
+        ui.openMenu(
+          selectionMenu(rows.sort((a, b) => a - b).map((i) => shown[i]), { onRemove: onRemove ? () => removeRows(rows) : undefined }),
+          at,
+          { title: `${rows.length} songs`, subtitle: 'selection' },
+        );
+        return;
+      }
+      ui.openMenu(menuFor(row), at, songHeader(shown[row]));
+    },
+    [menuFor, onRemove, removeRows, shown],
+  );
+
+  const onDragStart = useCallback(
+    (row: number, event: DragEvent) => {
+      if (gripDown.current) {
+        event.preventDefault();
+        return;
+      }
+      const sel = latest.current.selected;
+      const songsToDrag = sel.has(row) && sel.size > 1 ? [...sel].sort((a, b) => a - b).map((i) => shown[i]) : [shown[row]];
+      startDrag(event, { kind: 'songs', songs: songsToDrag });
+    },
+    [shown],
+  );
+
+  /* ---------------------------------------------------------- keyboard nav */
+
+  const focusRow = useCallback(
+    (row: number) => {
+      const el = scroller;
+      const list = listRef.current;
+      if (!el || !list || row < 0 || row >= shown.length) return;
+      const offset = list.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+      const top = offset + row * rowHeight;
+      const bar = 64;
+      if (top < el.scrollTop + bar) el.scrollTop = top - bar;
+      else if (top + rowHeight > el.scrollTop + el.clientHeight - 8) el.scrollTop = top + rowHeight - el.clientHeight + 8;
+      // Two frames: a windowed list renders the row on the frame after the scroll.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          list.querySelector<HTMLElement>(`[data-row="${row}"]`)?.focus();
+        }),
+      );
+    },
+    [rowHeight, scroller, shown.length],
+  );
+
+  const onRowKey = useCallback(
+    (row: number, event: KeyboardEvent) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        event.stopPropagation();
+        const next = row + (event.key === 'ArrowDown' ? 1 : -1);
+        if (next < 0 || next >= shown.length) return;
+        if (event.shiftKey) {
+          setSelected((prev) => new Set(prev).add(row).add(next));
+        } else if (!latest.current.touch) {
+          setSelected(new Set([next]));
+          anchor.current = next;
+        }
+        focusRow(next);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        play(row);
+      } else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+        event.preventDefault();
+        openMenu(row, event.currentTarget);
+      }
+    },
+    [focusRow, openMenu, play, shown.length],
+  );
 
   if (songs.length === 0) {
-    return (
-      <div className="fz-empty">
-        <div className="fz-empty__title">{emptyMessage ?? 'Nothing here yet'}</div>
-      </div>
+    return <div className="tracks-empty">{emptyText ?? 'nothing here yet'}</div>;
+  }
+
+  /* ------------------------------------------------------------------ rows */
+
+  const columns = gridColumns(variant, compact, showAlbum, showPlays, Boolean(onReorder));
+  const rows: ReactNode[] = [];
+  const first = virtual ? range.start : 0;
+  const last = virtual ? range.end : shown.length;
+
+  for (let row = first; row < last; row++) {
+    const song = shown[row];
+    const shift = reorder.shiftFor(row);
+    const lifted = reorder.state?.from === row;
+    // Where the row sits (windowing, reorder), separate from what it looks like.
+    const slotStyle: CSSProperties = {
+      height: rowHeight,
+      ...(virtual ? { position: 'absolute', top: row * rowHeight, left: 0, right: 0 } : null),
+      ...(reorder.state ? { transform: `translate3d(0, ${shift}px, 0)`, zIndex: lifted ? 3 : 1, position: virtual ? 'absolute' : 'relative' } : null),
+    };
+    const rowStyle: CSSProperties = { height: rowHeight, gridTemplateColumns: columns };
+    const rowNode = (
+      <TrackRow
+        song={song}
+        row={row}
+        number={variant === 'album' ? (song.track ?? order[row] + 1) : order[row] + 1}
+        variant={variant}
+        compact={compact}
+        touch={touch}
+        showAlbum={showAlbum}
+        showPlays={showPlays}
+        albumArtistName={albumArtistName}
+        style={touch ? rowStyle : { ...rowStyle, ...slotStyle }}
+        selected={selected.has(row)}
+        selecting={selecting}
+        lifted={lifted}
+        settling={Boolean(reorder.state) && !lifted}
+        grip={reorderEnabled ? reorder.handleProps(order[row]) : undefined}
+        onGripDown={() => {
+          gripDown.current = true;
+          window.addEventListener('pointerup', () => (gripDown.current = false), { once: true });
+        }}
+        onClick={onRowClick}
+        onPlay={play}
+        onMenu={openMenu}
+        onKey={onRowKey}
+        onDragStart={onDragStart}
+      />
+    );
+
+    const key = `${song.id}:${order[row]}`;
+    if (!touch) {
+      rows.push(<RowKey key={key}>{rowNode}</RowKey>);
+      continue;
+    }
+    if (selecting) {
+      rows.push(
+        <div key={key} className="track-slot" style={slotStyle}>
+          {rowNode}
+        </div>,
+      );
+      continue;
+    }
+
+    rows.push(
+      <SwipeRow
+        key={key}
+        style={slotStyle}
+        open={openSwipe?.index === row ? openSwipe.side : null}
+        onOpenChange={(next) => setOpenSwipe(next ? { index: row, side: next } : null)}
+        disabled={Boolean(reorder.state)}
+        leftActions={swipeLeft(song, onRemove ? () => removeRows([row]) : undefined, removeLabel)}
+        rightActions={swipeRight(song)}
+      >
+        {rowNode}
+      </SwipeRow>,
     );
   }
 
-  const columns =
-    variant === 'numbered'
-      ? showAlbum
-        ? '28px 1fr minmax(0, 0.6fr) 54px 62px'
-        : '28px 1fr 54px 62px'
-      : showAlbum
-        ? '1fr minmax(0, 0.6fr) 54px 62px'
-        : '1fr 54px 62px';
-
-  const compactColumns = variant === 'numbered' ? '28px 1fr auto' : '1fr auto';
-
   return (
     <>
+      {sortable && !compact && (
+        <ListHeader variant={variant} columns={columns} showAlbum={showAlbum} showPlays={showPlays} sort={sort} onSort={setSort} />
+      )}
       <div
-        className={`fz-tracks fz-stagger-fast ${variant === 'numbered' && !showAlbum ? 'fz-tracks--measure' : ''}`}
-        ref={(el) => (reorder.containerRef.current = el)}
+        ref={listRef}
+        className={`tracks tracks--${variant} ${reorder.state ? 'is-reordering' : ''}`}
+        role="list"
+        style={virtual ? { position: 'relative', height: shown.length * rowHeight } : undefined}
       >
-        {songs.map((song, index) => {
-          const isCurrent = current?.id === song.id;
-          const starred = isStarred('song', song.id);
-          const badge = qualityBadge(song);
-          const selected = selection.has(index);
-          const beingDragged = reorder.state?.from === index;
-          const dropTarget = reorder.state?.to === index && reorder.state.from !== index;
-
-          const row = (
-            <TrackRow
-              song={song}
-              index={index}
-              songs={songs}
-              context={context}
-              variant={variant}
-              showAlbum={showAlbum}
-              compact={compact}
-              columns={compact ? compactColumns : columns}
-              isCurrent={isCurrent}
-              playing={playing}
-              starred={starred}
-              badge={badge}
-              selected={selected}
-              beingDragged={Boolean(beingDragged)}
-              dropTarget={Boolean(dropTarget)}
-              reorderHandle={onReorder ? reorder.handleProps(index) : undefined}
-              onClick={(event) => handleRowClick(event, index)}
-              onDoubleClick={() => actions.playQueue(songs, index, context)}
-              onContextMenu={(event) => open(event, buildMenu(song, index))}
-              onLongPress={(point) =>
-                openAtPoint(point, buildMenu(song, index), {
-                  title: song.title,
-                  subtitle: songArtist(song),
-                  artwork: (
-                    <Artwork coverArt={song.coverArt} name={song.title} size={120} className="fz-actionsheet__art" />
-                  ),
-                })
-              }
-              onEllipsis={(element) => openAt(element, buildMenu(song, index))}
-              onToggleStar={() => void toggleStar('song', song.id)}
-              onAlbum={() => song.albumId && navigate(`/album/${encodeURIComponent(song.albumId)}`)}
-            />
-          );
-
-          if (!touch) {
-            return (
-              <div key={`${song.id}-${index}`} style={{ ['--i' as string]: Math.min(index, 12) }}>
-                {row}
-              </div>
-            );
-          }
-
-          // Swipe left plays the song next; swipe right adds it to the end of
-          // the queue. The first action in each drawer is what a full swipe
-          // commits, so those two must lead.
-          const leftActions: SwipeAction[] = [
-            {
-              id: 'next',
-              label: 'Play Next',
-              tone: 'next',
-              icon: <PlayNextIcon />,
-              onSelect: () => actions.playNext([song]),
-            },
-            {
-              id: 'love',
-              label: starred ? 'Unfavourite' : 'Favourite',
-              tone: 'love',
-              icon: <HeartIcon filled={starred} />,
-              onSelect: () => void toggleStar('song', song.id),
-            },
-          ];
-          if (onRemove) {
-            leftActions.push({
-              id: 'remove',
-              label: 'Remove',
-              tone: 'remove',
-              icon: <TrashIcon />,
-              onSelect: () => onRemove(index),
-            });
-          }
-
-          const rightActions: SwipeAction[] = [
-            {
-              id: 'queue',
-              label: 'Add to Queue',
-              tone: 'last',
-              icon: <AddToQueueIcon />,
-              onSelect: () => actions.playLater([song]),
-            },
-            {
-              id: 'playlist',
-              label: 'Playlist',
-              tone: 'playlist',
-              icon: <PlusIcon />,
-              onSelect: () => addToPlaylist([song]),
-            },
-          ];
-
-          return (
-            <SwipeableRow
-              key={`${song.id}-${index}`}
-              style={{ ['--i' as string]: Math.min(index, 12) }}
-              leftActions={leftActions}
-              rightActions={rightActions}
-              open={openSwipe?.index === index ? openSwipe.side : null}
-              onOpenChange={(next) => setOpenSwipe(next ? { index, side: next } : null)}
-            >
-              {row}
-            </SwipeableRow>
-          );
-        })}
+        {rows}
       </div>
-
-      {selectedSongs.length > 0 && (
+      {(selectedSongs.length > 1 || selecting) && (
         <SelectionBar
           songs={selectedSongs}
-          indices={[...selection].sort((a, b) => a - b)}
-          onClear={() => setSelection(new Set())}
-          onRemove={onRemove}
-          context={context}
+          onClear={clearSelection}
+          onRemove={onRemove ? () => removeRows([...selected]) : undefined}
+          removeLabel={removeLabel}
+          onSelectAll={() => setSelected(new Set(shown.map((_, i) => i)))}
         />
       )}
-
-      {menu}
     </>
   );
 }
 
-/* ------------------------------------------------------------------- one row */
+function RowKey({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+function gridColumns(variant: 'album' | 'default', compact: boolean, album: boolean, plays: boolean, grip: boolean): string {
+  if (compact) {
+    const lead = variant === 'album' ? '30px ' : '';
+    return `${lead}minmax(0, 1fr) auto`;
+  }
+  const parts: string[] = [];
+  if (variant === 'album') parts.push('36px', 'minmax(0, 1fr)');
+  else parts.push('minmax(0, 1.5fr)');
+  if (album && variant !== 'album') parts.push('minmax(0, 1fr)');
+  if (plays) parts.push('64px');
+  parts.push('58px', grip ? '104px' : '76px');
+  return parts.join(' ');
+}
+
+/* ------------------------------------------------------------------ header */
+
+function ListHeader({
+  variant, columns, showAlbum, showPlays, sort, onSort,
+}: {
+  variant: 'album' | 'default';
+  columns: string;
+  showAlbum: boolean;
+  showPlays: boolean;
+  sort: { key: SortKey; dir: 1 | -1 };
+  onSort: (sort: { key: SortKey; dir: 1 | -1 }) => void;
+}) {
+  const cell = (key: SortKey, label: string, className = '') => {
+    const active = sort.key === key;
+    return (
+      <button
+        type="button"
+        className={`tracks-head__cell ${active ? 'is-active' : ''} ${className}`}
+        onClick={() => onSort(active ? { key, dir: sort.dir === 1 ? -1 : 1 } : { key, dir: key === 'plays' ? -1 : 1 })}
+      >
+        {label}
+        {active && (sort.dir === 1 ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+      </button>
+    );
+  };
+  return (
+    <div className="tracks-head" style={{ gridTemplateColumns: columns }}>
+      {variant === 'album' && cell('index', '#')}
+      {cell('title', variant === 'album' ? 'title' : 'title / artist')}
+      {showAlbum && variant !== 'album' && cell('album', 'album')}
+      {showPlays && cell('plays', 'plays', 'is-right')}
+      {cell('duration', 'time', 'is-right')}
+      <span />
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------------- row */
 
 interface TrackRowProps {
   song: Song;
-  index: number;
-  songs: Song[];
-  context?: PlaybackContextInfo;
-  variant: 'numbered' | 'artwork';
-  showAlbum: boolean;
+  row: number;
+  number: number;
+  variant: 'album' | 'default';
   compact: boolean;
-  columns: string;
-  isCurrent: boolean;
-  playing: boolean;
-  starred: boolean;
-  badge: ReturnType<typeof qualityBadge>;
+  touch: boolean;
+  showAlbum: boolean;
+  showPlays: boolean;
+  albumArtistName?: string;
+  style: CSSProperties;
   selected: boolean;
-  beingDragged: boolean;
-  dropTarget: boolean;
-  reorderHandle?: Record<string, unknown>;
-  onClick: (event: MouseEvent) => void;
-  onDoubleClick: () => void;
-  onContextMenu: (event: MouseEvent) => void;
-  onLongPress: (point: { x: number; y: number }) => void;
-  onEllipsis: (element: HTMLElement) => void;
-  onToggleStar: () => void;
-  onAlbum: () => void;
+  selecting: boolean;
+  lifted: boolean;
+  settling: boolean;
+  grip?: ReturnType<ReturnType<typeof useReorder>['handleProps']>;
+  onGripDown: () => void;
+  onClick: (row: number, event: MouseEvent) => void;
+  onPlay: (row: number) => void;
+  onMenu: (row: number, at: { x: number; y: number } | Element) => void;
+  onKey: (row: number, event: KeyboardEvent) => void;
+  onDragStart: (row: number, event: DragEvent) => void;
 }
 
-function TrackRow(props: TrackRowProps) {
+const TrackRow = memo(function TrackRow(props: TrackRowProps) {
   const {
-    song, index, songs, context, variant, showAlbum, compact, columns, isCurrent,
-    playing, starred, badge, selected, beingDragged, dropTarget, reorderHandle,
-    onClick, onDoubleClick, onContextMenu, onLongPress, onEllipsis, onToggleStar, onAlbum,
+    song, row, number, variant, compact, touch, showAlbum, showPlays, albumArtistName, style, selected, selecting,
+    lifted, settling, grip, onGripDown, onClick, onPlay, onMenu, onKey, onDragStart,
   } = props;
-
-  const { actions } = usePlayer();
-  const longPress = useLongPress({ onLongPress });
+  const status = usePlayer((s) => (s.current?.id === song.id ? (s.playing ? 'playing' : 'paused') : 'none'));
+  const starred = useIsStarred('song', song.id);
+  const offline = useIsDownloaded(song.id);
+  const longPress = useLongPress((point) => onMenu(row, point));
+  const badge = qualityBadge(song);
+  const current = status !== 'none';
+  const artist = songArtist(song);
+  const showArtistLine = variant !== 'album' || (albumArtistName !== undefined && artist !== albumArtistName);
 
   return (
     <div
-      data-reorder-item=""
-      className={`fz-track ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${
-        beingDragged ? 'is-lifted' : ''
-      } ${dropTarget ? 'is-drop-target' : ''}`}
-      style={{ ['--track-cols' as string]: columns }}
+      className={`track ${current ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${lifted ? 'is-lifted' : ''} ${
+        settling ? 'is-settling' : ''
+      } ${song.isRadio ? 'is-radio' : ''}`}
+      role="listitem"
+      tabIndex={row === 0 ? 0 : -1}
+      data-row={row}
+      style={style}
+      draggable={!touch}
+      onDragStart={(event) => onDragStart(row, event)}
+      onDragEnd={endDrag}
       onClick={(event) => {
-        if (longPress.didFire()) return;
-        onClick(event);
+        if (longPress.consumeClick()) return;
+        onClick(row, event);
       }}
-      onDoubleClick={onDoubleClick}
-      onContextMenu={onContextMenu}
-      {...longPress.handlers}
+      onDoubleClick={() => !touch && onPlay(row)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (touch) return;
+        onMenu(row, { x: event.clientX, y: event.clientY });
+      }}
+      onKeyDown={(event) => onKey(row, event)}
+      {...(touch ? longPress.handlers : null)}
     >
-      {variant === 'numbered' && (
-        <div className="fz-track__index">
-          {isCurrent ? (
-            <span className={`fz-eq ${playing ? '' : 'is-paused'}`}><span /><span /><span /></span>
+      {variant === 'album' && (
+        <div className="track__num">
+          {selecting ? (
+            <span className={`check ${selected ? 'is-on' : ''}`}>{selected && <CheckIcon />}</span>
+          ) : current ? (
+            <Eq paused={status === 'paused'} />
           ) : (
             <>
-              <span className="fz-track__index-number">{song.track ?? index + 1}</span>
-              <button
-                type="button"
-                className="fz-track__index-play"
-                aria-label={`Play ${song.title}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  actions.playQueue(songs, index, context);
-                }}
-              >
-                <PlayIcon style={{ width: 12, height: 12 }} />
-              </button>
+              <span className="track__n tnum">{number}</span>
+              {!touch && (
+                <button
+                  type="button"
+                  className="track__play"
+                  aria-label={`Play ${song.title}`}
+                  tabIndex={-1}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onPlay(row);
+                  }}
+                >
+                  <PlayIcon />
+                </button>
+              )}
             </>
           )}
         </div>
       )}
 
-      <div className="fz-track__main">
-        {variant === 'artwork' && (
-          <Artwork coverArt={song.coverArt} name={song.title} size={120} className="fz-track__art">
-            {!compact && (
-              <button
-                type="button"
-                className="fz-play-overlay"
-                style={{ inset: 0, width: '100%', height: '100%', borderRadius: 'inherit', border: 'none' }}
-                aria-label={`Play ${song.title}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  actions.playQueue(songs, index, context);
-                }}
-              >
-                {isCurrent && playing ? <span className="fz-eq"><span /><span /><span /></span> : <PlayIcon />}
-              </button>
-            )}
-          </Artwork>
-        )}
-        <div className="fz-track__text">
-          <span className="fz-track__title fz-truncate">{song.title}</span>
-          <span className="fz-track__sub fz-truncate">
-            {songArtist(song)}
-            {compact && showAlbum && song.album ? ` — ${song.album}` : ''}
-            {badge?.lossless && !compact && (
-              <span
-                className={`fz-badge ${badge.hiRes ? 'fz-badge--hires' : 'fz-badge--lossless'}`}
-                style={{ marginLeft: 6, verticalAlign: 'middle' }}
-              >
-                {badge.hiRes ? 'Hi-Res' : 'Lossless'}
+      <div className="track__main">
+        {variant !== 'album' && (
+          <div className="track__art-wrap">
+            {selecting && <span className={`check check--over ${selected ? 'is-on' : ''}`}>{selected && <CheckIcon />}</span>}
+            <Artwork coverArt={song.coverArt} name={song.title} size={compact ? 46 : 38} className="track__art" />
+            {current && !selecting && (
+              <span className="track__art-eq">
+                <Eq paused={status === 'paused'} />
               </span>
             )}
-          </span>
+            {!touch && !current && !selecting && (
+              <button
+                type="button"
+                className="track__art-play"
+                aria-label={`Play ${song.title}`}
+                tabIndex={-1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPlay(row);
+                }}
+              >
+                <PlayIcon />
+              </button>
+            )}
+          </div>
+        )}
+        <div className="track__text">
+          <div className="track__title truncate">
+            {song.title}
+            {badge?.hiRes && !compact && <span className="tag tag--accent track__tag">hi-res</span>}
+          </div>
+          {(showArtistLine || compact) && (
+            <div className="track__sub truncate">
+              {offline && <DownloadIcon className="track__offline" aria-label="downloaded" />}
+              {showArtistLine ? artist : formatTime(song.duration)}
+              {compact && showArtistLine && showAlbum && song.album ? ` · ${song.album}` : ''}
+            </div>
+          )}
         </div>
       </div>
 
-      {!compact && showAlbum && (
-        <button
-          type="button"
-          className="fz-track__meta fz-truncate"
-          style={{ textAlign: 'left' }}
-          onClick={(event) => {
-            event.stopPropagation();
-            onAlbum();
-          }}
-        >
-          {song.album}
-        </button>
+      {!compact && showAlbum && variant !== 'album' && (
+        <div className="track__album truncate">
+          {song.albumId ? (
+            <button
+              type="button"
+              className="track__link"
+              tabIndex={-1}
+              onClick={(event) => {
+                event.stopPropagation();
+                act.goToAlbum(song);
+              }}
+            >
+              {song.album}
+            </button>
+          ) : (
+            song.album
+          )}
+        </div>
       )}
+      {!compact && showPlays && <div className="track__time tnum">{song.playCount ?? 0}</div>}
+      {!compact && <div className="track__time tnum">{song.isRadio ? 'live' : formatTime(song.duration)}</div>}
 
-      {!compact && <div className="fz-track__meta">{formatTime(song.duration)}</div>}
-
-      <div className="fz-track__actions">
-        {!compact && (
+      <div className="track__actions">
+        {!compact && !song.isRadio && (
           <button
             type="button"
-            className={`fz-icon-btn fz-track__star ${starred ? 'is-on' : ''}`}
-            aria-label={starred ? 'Remove from Favourites' : 'Add to Favourites'}
+            className={`ibtn ibtn--sm track__heart ${starred ? 'is-on' : ''}`}
+            aria-label={starred ? 'Remove from favourites' : 'Add to favourites'}
             aria-pressed={starred}
+            tabIndex={-1}
             onClick={(event) => {
               event.stopPropagation();
-              onToggleStar();
+              void act.toggleFavourite('song', song.id);
             }}
           >
             <HeartIcon filled={starred} />
           </button>
         )}
-        {reorderHandle ? (
-          <span className="fz-icon-btn" aria-label="Reorder" {...reorderHandle}>
+        {grip && (
+          <span
+            className="track__grip"
+            aria-label="Drag to reorder"
+            {...grip}
+            onPointerDown={(event) => {
+              onGripDown();
+              grip.onPointerDown(event);
+            }}
+          >
             <GripIcon />
           </span>
-        ) : null}
-        <button
-          type="button"
-          className="fz-icon-btn"
-          aria-label={`More options for ${song.title}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onEllipsis(event.currentTarget);
-          }}
-        >
-          <EllipsisIcon />
-        </button>
+        )}
+        {!selecting && (
+          <button
+            type="button"
+            className="ibtn ibtn--sm track__more"
+            aria-label={`More for ${song.title}`}
+            tabIndex={-1}
+            onClick={(event) => {
+              event.stopPropagation();
+              onMenu(row, event.currentTarget);
+            }}
+          >
+            <EllipsisIcon />
+          </button>
+        )}
       </div>
     </div>
   );
+});
+
+/* ----------------------------------------------------------- swipe actions */
+
+function swipeLeft(song: Song, onRemove: (() => void) | undefined, removeLabel: string): SwipeAction[] {
+  const actions: SwipeAction[] = [
+    { id: 'next', label: 'play next', tone: 'blue', icon: <PlayNextIcon />, onSelect: () => act.playNext([song]) },
+    { id: 'queue', label: 'queue', tone: 'green', icon: <AddToQueueIcon />, onSelect: () => act.addToQueue([song]) },
+  ];
+  if (onRemove) actions.push({ id: 'remove', label: removeLabel, tone: 'red', icon: <TrashIcon />, onSelect: onRemove });
+  return actions;
+}
+
+function swipeRight(song: Song): SwipeAction[] {
+  if (song.isRadio) return [];
+  return [
+    {
+      id: 'love',
+      label: 'favourite',
+      tone: 'orange',
+      icon: <HeartIcon />,
+      onSelect: () => void act.toggleFavourite('song', song.id),
+    },
+    { id: 'playlist', label: 'playlist', tone: 'yellow', icon: <PlusIcon />, onSelect: () => act.choosePlaylist([song]) },
+  ];
 }
 
 /* ------------------------------------------------------------ selection bar */
 
 function SelectionBar({
-  songs,
-  indices,
-  onClear,
-  onRemove,
-  context,
+  songs, onClear, onRemove, removeLabel, onSelectAll,
 }: {
   songs: Song[];
-  indices: number[];
   onClear: () => void;
-  onRemove?: (index: number) => void;
-  context?: PlaybackContextInfo;
+  onRemove?: () => void;
+  removeLabel: string;
+  onSelectAll: () => void;
 }) {
-  const { actions } = usePlayer();
-  const { addToPlaylist } = useDialogs();
-  const { toggleStar, isStarred } = useLibrary();
-
-  const allStarred = songs.every((song) => isStarred('song', song.id));
-
-  /*
-   * Rendered into the body rather than into the list.
-   *
-   * `position: fixed` is only fixed to the viewport while no ancestor carries a
-   * transform, a filter or paint containment — and this bar lives inside a page
-   * that has all three at various moments: a spring entrance, a scroll-driven
-   * reveal, and `content-visibility` on every section. Any one of them turns
-   * the bar into an absolutely-positioned element halfway up the track list.
-   * A portal is the only version of this that cannot be broken from above.
-   */
+  const none = songs.length === 0;
+  // Rendered into the body, so no transform or overflow on an ancestor can
+  // turn `position: fixed` into something else.
   return createPortal(
-    <div className="fz-selection-bar fz-mat fz-mat--thick fz-mat--lens fz-mat--e4">
-      <div className="fz-selection-bar__count">
-        {songs.length} selected
+    <div className="selbar" role="toolbar" aria-label="Selection">
+      <div className="selbar__count">
+        <span className="tnum">{songs.length}</span> selected
       </div>
-      <div className="fz-selection-bar__actions">
-        <button type="button" className="fz-btn" onClick={() => actions.playQueue(songs, 0, context)}>
-          <PlayIcon /> Play
+      <div className="selbar__keys">
+        <button type="button" className="key key--sm key--primary" disabled={none} onClick={() => act.playSongs(songs, 0)}>
+          <PlayIcon /> play
         </button>
-        <button type="button" className="fz-btn" onClick={() => actions.playNext(songs)}>
-          <PlayNextIcon /> Play Next
+        <button type="button" className="key key--sm" disabled={none} onClick={() => act.playNext(songs)}>
+          <PlayNextIcon /> next
         </button>
-        <button type="button" className="fz-btn" onClick={() => actions.playLater(songs)}>
-          <AddToQueueIcon /> Add to Queue
+        <button type="button" className="key key--sm" disabled={none} onClick={() => act.addToQueue(songs)}>
+          <AddToQueueIcon /> queue
         </button>
-        <button type="button" className="fz-btn" onClick={() => addToPlaylist(songs)}>
-          <PlusIcon /> Add to Playlist
+        <button type="button" className="key key--sm" disabled={none} onClick={() => act.choosePlaylist(songs)}>
+          <PlusIcon /> playlist
         </button>
         <button
           type="button"
-          className="fz-btn"
-          onClick={() => songs.forEach((song) => void toggleStar('song', song.id))}
+          className="key key--sm key--icon"
+          aria-label="More"
+          disabled={none}
+          onClick={(event) => ui.openMenu(selectionMenu(songs, { onRemove }), event.currentTarget, { title: `${songs.length} songs`, subtitle: 'selection' })}
         >
-          {allStarred ? <CheckIcon /> : <HeartIcon />} {allStarred ? 'Unfavourite' : 'Favourite'}
+          <EllipsisIcon />
         </button>
         {onRemove && (
-          <button
-            type="button"
-            className="fz-btn"
-            onClick={() => {
-              // Remove from the end so earlier indices stay valid.
-              [...indices].sort((a, b) => b - a).forEach(onRemove);
-              onClear();
-            }}
-          >
-            <TrashIcon /> Remove
+          <button type="button" className="key key--sm key--danger" disabled={none} onClick={onRemove}>
+            <TrashIcon /> {removeLabel}
           </button>
         )}
       </div>
-      <button type="button" className="fz-icon-btn" aria-label="Clear selection" onClick={onClear}>
+      <button type="button" className="key key--sm key--ghost" onClick={onSelectAll}>
+        all
+      </button>
+      <button type="button" className="ibtn" aria-label="Clear selection" onClick={onClear}>
         <CloseIcon />
       </button>
     </div>,

@@ -5,9 +5,8 @@
 
 import {
   DEFAULT_CANDIDATES,
-  ServerCandidate,
-  ProbeResult,
-  Resolution,
+  hostOfUrl,
+  isHomeHost,
   clearResolution,
   loadCachedResolution,
   loadCandidates,
@@ -16,12 +15,17 @@ import {
   resolveEndpoint,
   saveCandidates,
   saveResolution,
+  type ProbeResult,
+  type Resolution,
+  type ServerCandidate,
 } from './endpoint';
 
 export type ConnectionStatus = 'idle' | 'resolving' | 'online' | 'offline';
 
 export interface ConnectionState {
   status: ConnectionStatus;
+  /** True while any race is running, including quiet background re-checks. */
+  checking: boolean;
   baseUrl: string | null;
   candidateId: string | null;
   label: string | null;
@@ -41,6 +45,7 @@ const REDISCOVER_MS = 4 * 60_000;
 class ConnectionManager {
   private listeners = new Set<Listener>();
   private inflight: Promise<Resolution | null> | null = null;
+  private raceId = 0;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private rediscover: ReturnType<typeof setInterval> | null = null;
   private lastHiddenAt = 0;
@@ -48,6 +53,7 @@ class ConnectionManager {
 
   state: ConnectionState = {
     status: 'idle',
+    checking: false,
     baseUrl: null,
     candidateId: null,
     label: null,
@@ -73,12 +79,14 @@ class ConnectionManager {
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     fn(this.state);
-    return () => this.listeners.delete(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
   }
 
   private emit(patch: Partial<ConnectionState>) {
     this.state = { ...this.state, ...patch };
-    for (const fn of this.listeners) fn(this.state);
+    for (const fn of [...this.listeners]) fn(this.state);
   }
 
   getCandidates(): ServerCandidate[] {
@@ -97,19 +105,28 @@ class ConnectionManager {
     return this.state.baseUrl;
   }
 
-  /** Resolve now. Concurrent callers share one in-flight race. */
+  /**
+   * Resolve now. Concurrent callers share one in-flight race; `force` starts a
+   * new one, and only the newest race is allowed to publish its answer.
+   *
+   * A race run while we are already online is a background check: it does not
+   * flip the status, so nothing that is waiting on `ensure()` stalls behind it.
+   */
   resolve(force = false): Promise<Resolution | null> {
     if (this.inflight && !force) return this.inflight;
-    this.emit({ status: 'resolving' });
+    const id = ++this.raceId;
+    const background = this.state.status === 'online';
+    this.emit(background ? { checking: true } : { status: 'resolving', checking: true });
+
     const probes: ProbeResult[] = [];
-    const run = resolveEndpoint(this.state.candidates, {
-      onProbe: (p) => probes.push(p),
-    })
+    const run = resolveEndpoint(this.state.candidates, { onProbe: (p) => probes.push(p) })
       .then((res) => {
+        if (id !== this.raceId) return res;
         if (res) {
           saveResolution(res);
           this.emit({
             status: 'online',
+            checking: false,
             baseUrl: normalizeBase(res.candidate.url),
             candidateId: res.candidate.id,
             label: res.candidate.label,
@@ -118,12 +135,12 @@ class ConnectionManager {
             lastResolvedAt: res.at,
           });
         } else {
-          this.emit({ status: 'offline', latencyMs: null, lastProbes: probes });
+          this.emit({ status: 'offline', checking: false, latencyMs: null, lastProbes: probes });
         }
         return res;
       })
       .finally(() => {
-        this.inflight = null;
+        if (id === this.raceId) this.inflight = null;
       });
     this.inflight = run;
     return run;
@@ -146,6 +163,7 @@ class ConnectionManager {
   /** Called by the API client when a request dies at the transport layer. */
   async handleNetworkFailure(): Promise<string | null> {
     clearResolution();
+    if (this.state.status === 'online') this.emit({ status: 'resolving' });
     const res = await this.resolve(true);
     return res ? normalizeBase(res.candidate.url) : null;
   }
@@ -156,10 +174,12 @@ class ConnectionManager {
       void this.resolve();
       return;
     }
+    if (this.inflight) return;
     const current = this.state.candidates.find((c) => c.id === this.state.candidateId);
     const result = await probe(current ?? { id: 'current', label: 'Current', url: base, priority: 0, enabled: true }, 4000);
     if (!result.ok) void this.resolve(true);
     else if (this.state.status !== 'online') this.emit({ status: 'online', latencyMs: result.latencyMs });
+    else this.emit({ latencyMs: result.latencyMs });
   }
 
   start(): void {
@@ -198,3 +218,14 @@ class ConnectionManager {
 }
 
 export const connection = new ConnectionManager();
+
+/**
+ * Home or away, judged by the address currently in use. Same-origin mode is
+ * judged by the address the app itself was loaded from, since that is where
+ * the API calls go.
+ */
+export function networkKind(state: ConnectionState = connection.state): 'home' | 'remote' {
+  const base = state.baseUrl;
+  const host = base ? hostOfUrl(base) : typeof location !== 'undefined' ? location.hostname : '';
+  return isHomeHost(host) ? 'home' : 'remote';
+}

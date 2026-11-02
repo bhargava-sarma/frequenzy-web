@@ -1,41 +1,94 @@
 # Frequenzy
 
-A music client for [Navidrome](https://www.navidrome.org/) that looks and behaves like Apple
-Music, streams your files without transcoding them, and follows you between home Wi‑Fi and
-Tailscale without ever asking which one you are on.
+A network music player for [Navidrome](https://www.navidrome.org/), built like a piece of hardware:
+aluminium or graphite casework, a black dot-matrix display, keys with travel, LEDs, a volume knob.
+It streams your files untouched, follows you between home Wi‑Fi and Tailscale on its own, and is
+fast — nothing re-renders four times a second while a song plays, lists are virtualised, and every
+page you have seen comes back instantly from cache.
 
 ---
 
-## What it does
+## The design
 
-**Bit-perfect playback.** Every stream is requested with `format=raw&maxBitRate=0`, which tells
-Navidrome to hand back the file on disk untouched. A 24‑bit/96 kHz FLAC arrives as a 24‑bit/96 kHz
-FLAC — no re-encode, no resample, no loss. Tracks are badged **Lossless** or **Hi‑Res Lossless** in
-the interface so you can see it is working, and *Get Info* shows the exact sample rate, bit depth
-and stream URL in use.
+Modern, retro, industrial. One system, used everywhere:
 
-**Automatic server selection.** Frequenzy knows about more than one address for your server and
-races them. Every enabled address is probed in parallel; the most preferred one that answers wins.
-It re-races whenever the network moves — coming back from the background, a `navigator.connection`
-change, an `online` event, a failed request, or every four minutes — so walking out of the house
-mid-song simply continues on Tailscale.
+- **Two finishes** — *aluminium* (light) and *graphite* (dark), or follow the system.
+- **Seven accents** — orange, blue, green, yellow, red, pink or mono. Signal colours (blue, green,
+  yellow, orange) mark kinds of action, the way coloured keys do on a sampler.
+- **The display** — a black LCD with a dot-matrix clock and readouts, used for now-playing, the
+  mini player, stats and storage.
+- **Keys, knob, fader** — primary keys drop onto their edge when pressed, function keys carry LEDs,
+  volume is a knob you drag or scroll, sliders have fader caps.
+- **Type** — Space Grotesk for text, JetBrains Mono for labels and numbers, Doto for the
+  dot-matrix readouts.
+- **Motion** — short, purposeful, and off entirely with *reduce motion* (or the OS setting).
 
-**Two interfaces, not one shrunk down.** On desktop: sidebar navigation, the centred LCD transport,
-hover-to-play artwork, click/shift/cmd multi-select with a batch toolbar. On a phone: a bottom tab
-bar, a mini player you flick up to open, a full player you pull down to dismiss, rows you swipe
-sideways to act on, and long-press action sheets. Both share liquid-glass panels with real
-refraction — an SVG displacement map, not just a blur — and a full-screen player lit by colours
-pulled out of the artwork.
+On desktop: a sidebar, a deck along the bottom (display, transport, function keys, knob) and an
+inspector panel for the queue, lyrics or track info. On a phone: a tab bar, a mini player, a
+full-screen player sheet, swipeable rows and long-press action sheets. Both are designed, neither is
+the other shrunk down.
 
-**Synced lyrics with romanization.** Lyrics come from your server first (embedded tags or `.lrc`
-sidecars, via the OpenSubsonic `getLyricsBySongId` endpoint) and fall back to
-[LRCLIB](https://lrclib.net/). Non-Latin lyrics are **transliterated, never translated** — 사랑해요
-becomes "saranghaeyo", not "I love you" — with the original line kept above the reading.
+---
 
-**Offline downloads.** Albums, playlists and single tracks can be kept on the device. The original
-bytes go into IndexedDB and play back from there, so a downloaded album works with no server in
-reach at all. IndexedDB rather than the Cache API on purpose: the Cache API is restricted to secure
-contexts, and Frequenzy is served over plain HTTP so it can reach a plain-HTTP Navidrome.
+## Features
+
+**Playback**
+- Gapless playback on two alternating `<audio>` elements; optional equal-power **crossfade** (1–12 s).
+- **Speed** 0.5–2× with pitch preserved, **A–B loop**, **sleep timer** (minutes or end of track,
+  with a fade).
+- **ReplayGain** (track or album) with pre-amp — only ever turns tracks down.
+- **Autoplay**: when the queue runs out, keep going with similar music.
+- Squared volume curve, so the bottom of the knob is usable.
+- Recovers on its own: retries a failed stream, reconnects after a network change, unsticks a
+  stalled stream, resumes where it was.
+- **Media Session**: lock screen, media keys, headphone controls.
+- **Hand-off**: optionally mirror the queue to the server and pick it up on another device.
+
+**Quality**
+- *Original* sends the file on disk, bit-for-bit (`format=raw`). A 24‑bit/96 kHz FLAC arrives as
+  one, and is badged **lossless** / **hi‑res**.
+- Separate quality **at home** and **away** (LAN vs Tailscale/internet), with transcode to MP3,
+  Opus or AAC at 96–320 kbps when you want to save data.
+
+**Queue**
+- Play next, play last, drag to reorder (mouse or finger), swipe to remove, jump anywhere.
+- Undo for destructive changes (clear, remove, replace), shuffle up next, save queue as playlist.
+- Drag albums, playlists or tracks onto the queue, a sidebar playlist, or the pinned shelf.
+
+**Library**
+- Home (recently played, recently added, on repeat, rediscover), Browse, Albums, Artists, Songs,
+  Genres, Playlists, Favourites, Recently added, History, Downloads.
+- Sort and filter everywhere, grid or list, three card sizes, A–Z rail on artists.
+- Album pages split by disc, with album notes; artist pages with top songs, releases grouped into
+  albums, EPs, singles, compilations and live, similar artists and a sanitised bio.
+- Playlists: create, rename, describe, reorder, remove, make public, duplicate, export as M3U.
+- Multi-select (click, ⇧-click, ⌘/Ctrl-click) with a batch bar: play, queue, favourite, add to
+  playlist, download.
+- **Pins**: keep albums, artists and playlists one click away in the sidebar.
+
+**Radio**
+- Internet radio stations from Navidrome.
+- Mixes: everything, favourites, by decade, by genre.
+- Stations from any song, album or artist — similar music, endlessly.
+
+**Lyrics**
+- Synced lyrics from the server (embedded or `.lrc`), falling back to [LRCLIB](https://lrclib.net/).
+- Search and pick a different lyric, nudge timing ±, three text sizes, tap a line to seek.
+- **Romanization** — transliterated, never translated (see below).
+
+**Stats**
+- A local listening log (a listen counts after 30 s or half the track): listens, hours, artists,
+  songs, day streak, a heat-map of every day, by hour, by weekday, top songs/artists/albums.
+- 7 days, 30 days, a year or all time. Export or clear.
+
+**Offline**
+- Keep albums, playlists or tracks on the device (IndexedDB) and play them with no server at all.
+
+**Fast to drive**
+- **Command palette** (⌘/Ctrl K): every page, every action, your library, as you type.
+- Keyboard shortcuts for everything (press `?`), including `g`-prefixed navigation.
+- Context menus on everything, with submenus; action sheets on phones.
+- Pull to refresh, scroll position restored on back, data cached and revalidated in the background.
 
 ---
 
@@ -45,19 +98,37 @@ On a phone:
 
 | Gesture | What it does |
 | --- | --- |
-| Swipe a track **left** | Play Next / Play Last (and Remove, inside a playlist) |
+| Swipe a track **left** | Play next / add to queue (and remove, inside a playlist) |
 | Swipe a track **right** | Favourite, or add to a playlist |
 | Swipe far in either direction | Runs the first action without lifting your finger |
-| **Long-press** a track | Opens the full action sheet, headed by what you pressed |
-| Swipe the **mini player** up | Opens the full player |
+| **Long-press** a track | Opens the action sheet |
+| Tap or flick up the **mini player** | Opens the full player |
 | Swipe the **mini player** sideways | Previous / next track |
 | Pull the **player** down | Dismisses it |
-| Swipe the **artwork** sideways | Previous / next track |
-| **Pull down** on a list | Refreshes it |
+| **Pull down** on a page | Refreshes it |
 | Drag a queue row's grip | Reorders the queue |
+| Swipe a queue row left | Remove, or play next |
 
-On desktop, click selects a row, ⇧-click extends the selection and ⌘/Ctrl-click toggles one; a
-floating toolbar then plays, queues, favourites or playlists everything selected at once.
+Keyboard (also listed in the app with `?`):
+
+| Key | Action |
+| --- | --- |
+| `Space` | Play / pause |
+| `N` / `P` | Next / previous track |
+| `←` `→` | Seek 5 s (`⇧` for 30 s) |
+| `0`–`9` | Jump to 0–90% |
+| `+` / `−` | Volume |
+| `M` | Mute |
+| `S` / `R` / `A` | Shuffle / repeat / autoplay |
+| `B` | A–B loop: set A, set B, clear |
+| `[` `]` `\` | Slower / faster / normal speed |
+| `H` | Favourite the current track |
+| `F` `L` `Q` `I` `T` | Full player, lyrics, queue, info, sleep timer |
+| `G` then `H` `B` `R` `A` `I` `S` `P` `F` `Y` `D` `T` `,` | Go to home, browse, radio, albums, artists, songs, playlists, favourites, history, downloads, stats, settings |
+| `⌘`/`Ctrl` `K` | Command palette |
+| `/` | Search |
+| `⌘`/`Ctrl` `A` | Select every track in a list |
+| `Esc` | Close, or clear the selection |
 
 ---
 
@@ -71,14 +142,14 @@ node server/serve.mjs --port 4544 --upstream http://127.0.0.1:4533
 
 Then open `http://<your-server>:4544` from any device and sign in with your Navidrome credentials.
 
-`--upstream` is worth setting: it makes the host proxy the Subsonic API from its own origin, which
-means no CORS to configure and one network hop instead of two. Frequenzy detects that setup on its
-own and prefers it (see **Same-origin mode** below).
+`--upstream` makes the host proxy the Subsonic API from its own origin: no CORS to configure and one
+network hop instead of two. Frequenzy detects that setup on its own and prefers it.
 
 For development:
 
 ```bash
 npm run dev        # http://localhost:5173
+npm run typecheck
 ```
 
 ---
@@ -87,95 +158,55 @@ npm run dev        # http://localhost:5173
 
 Frequenzy ships with three candidate addresses, in priority order:
 
-| Priority | Name         | Address                     |
-| -------- | ------------ | --------------------------- |
-| `-100`   | This server  | *(same origin)*             |
+| Priority | Name         | Address                      |
+| -------- | ------------ | ---------------------------- |
+| `-100`   | This server  | *(same origin)*              |
 | `0`      | Home Wi‑Fi   | `http://192.168.68.107:4533` |
 | `10`     | Tailscale    | `http://100.91.236.120:4533` |
 
-On startup — and again whenever the network looks like it changed — all three are probed at once
-with `ping.view`. A candidate counts as reachable only if it returns a real Subsonic envelope, so a
-static file server answering `404` cannot be mistaken for Navidrome.
+On startup — and whenever the network looks like it changed (coming back from the background, a
+`navigator.connection` change, an `online` event, a failed request, or every few minutes) — all of
+them are probed at once with `ping.view`. A candidate counts only if it returns a real Subsonic
+envelope, so a static file server answering `404` cannot be mistaken for Navidrome. The most
+preferred address that answers wins:
 
-The first success starts a short grace window (900 ms) before settling, which lets a slightly slower
-but more-preferred address still win the race. In practice:
+- **At home:** the LAN address answers in milliseconds and wins.
+- **Away, on Tailscale:** the LAN address has no route; Tailscale wins.
+- **At home and on Tailscale:** both answer; the LAN address wins on priority.
 
-- **At home:** the LAN address answers in single-digit milliseconds and wins.
-- **Away, on Tailscale:** the LAN address has no route and fails; Tailscale wins.
-- **At home *and* on Tailscale:** both answer, and the LAN address wins on priority — you get the
-  fast path automatically.
+The winner is cached, so the next launch talks to the right server immediately while re-probing in
+the background. A request that fails at the transport layer re-runs the race and retries once, so a
+song that starts on the LAN and finishes on Tailscale never surfaces an error. Background re-checks
+never block a request that is already on its way.
 
-The winner is cached in `localStorage`, so the next launch starts talking to the right server
-immediately while re-probing in the background. If a request ever fails at the transport layer, the
-race is re-run and the request retried once against the new winner — a song that starts on the LAN
-and finishes on Tailscale never surfaces an error.
+The network chip in the sidebar shows which address is live and how fast it answered; click it to
+see every candidate and force a re-check. Addresses are editable in **Settings → servers**.
 
-The sidebar's connection chip shows which address is live and how fast it answered; click it to see
-every candidate's status and force a re-check. Addresses are editable in **Settings → Servers**.
-
-### Same-origin mode
-
-If you run `server/serve.mjs` with `--upstream`, it serves the app *and* proxies `/rest/*` to
-Navidrome. The app then reaches the API at its own origin, which:
-
-- removes CORS from the equation entirely,
-- keeps everything on one connection,
-- and works identically over LAN and Tailscale, because both addresses hit the same host.
-
-This is the recommended way to run it. The direct-address mode still works and is what `npm run dev`
-uses; it needs Navidrome to send permissive CORS headers on `/rest` (which it does by default). If
-your reverse proxy strips them, use same-origin mode instead.
-
-### HTTP, HTTPS and mixed content
-
-Browsers refuse to let an `https://` page talk to an `http://` address. Since both of your server
-addresses are plain HTTP, **serve Frequenzy over HTTP too** (as `serve.mjs` does). If you later put
-the app behind TLS, put Navidrome behind the same TLS origin and use same-origin mode.
+Browsers refuse to let an `https://` page talk to an `http://` address, so serve Frequenzy over HTTP
+(as `serve.mjs` does), or put Navidrome behind the same TLS origin and use `--upstream`.
 
 ---
 
 ## Romanization
 
-The goal is transliteration — how the words *sound*, spelled with the Latin alphabet — so you can
-sing along to a language you do not read. Nothing is ever translated.
+Transliteration — how the words *sound*, in the Latin alphabet — so you can sing along to a
+language you do not read. Nothing is ever translated: 사랑해요 becomes *saranghaeyo*, not
+"I love you", with the original line kept above the reading.
 
 | Script | Approach |
 | --- | --- |
-| **Korean** | Revised Romanization, including liaison and consonant assimilation. 좋아요 → *joayo*, 신라 → *silla*, 같이 → *gachi* |
-| **Japanese** | Hepburn. Kana is table-driven; kanji uses the Kuromoji morphological analyzer, loaded on demand |
+| **Korean** | Revised Romanization, with liaison and consonant assimilation. 좋아요 → *joayo*, 신라 → *silla* |
+| **Japanese** | Hepburn. Kana is table-driven; kanji uses the Kuromoji analyzer, loaded on demand |
 | **Chinese** | Hanyu Pinyin via `pinyin-pro`, loaded on demand. Tone marks optional |
-| **Cyrillic** | Russian, Ukrainian, Serbian, Bulgarian and Macedonian letters. Елена → *Yelena* |
-| **Greek** | ISO 843 transcription with digraphs (μπ → *b*, ου → *ou*) |
-| **Indic** | Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam. ज़िंदगी → *zindagi*, संगीत → *sangeet*, இசை → *isai* |
-| **Thai** | RTGS-shaped, with a syllable state machine for onset/final position. สวัสดี → *sawatdi* |
-| **Arabic / Hebrew** | Consonant skeleton plus whatever vowels are written. These scripts omit most short vowels, so a transliteration can only reproduce what is on the page |
+| **Cyrillic** | Russian, Ukrainian, Serbian, Bulgarian, Macedonian. Елена → *Yelena* |
+| **Greek** | ISO 843 with digraphs (μπ → *b*, ου → *ou*) |
+| **Indic** | Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam |
+| **Thai** | RTGS-shaped, with a syllable state machine. สวัสดี → *sawatdi* |
+| **Arabic / Hebrew** | Consonant skeleton plus whatever vowels are written |
 
-A lyric sheet is analysed as a whole document, not line by line — that is how Han characters in a
-Japanese song get read as Japanese rather than Mandarin.
-
-The Kuromoji dictionary is ~18 MB and is copied out of `node_modules` into `public/dict/` by
-`scripts/sync-dict.mjs` (run automatically on `install`, `dev` and `build`). It is fetched only when
-a lyric actually contains kanji, and it is deliberately not committed to git.
-
----
-
-## Keyboard shortcuts
-
-| Key | Action |
-| --- | --- |
-| `Space` | Play / pause |
-| `⌘` / `Ctrl` + `←` `→` | Previous / next track |
-| `Shift` + `←` `→` | Seek 10 seconds |
-| `⌘` / `Ctrl` + `↑` `↓` | Volume |
-| `M` | Mute |
-| `S` | Shuffle |
-| `R` | Cycle repeat |
-| `F` | Full-screen player |
-| `⌘` / `Ctrl` + `F` | Search |
-| `⌘` / `Ctrl` + `A` | Select every track in the list |
-| `Esc` | Clear the selection, or close the player |
-
-Media keys and the OS lock screen work through the Media Session API.
+The Kuromoji dictionary (~18 MB) is copied out of `node_modules` into `public/dict/` by
+`scripts/sync-dict.mjs` (run on `install`, `dev` and `build`), fetched only when a lyric contains
+kanji, and not committed.
 
 ---
 
@@ -184,61 +215,46 @@ Media keys and the OS lock screen work through the Media Session API.
 ```
 src/
   lib/
+    store.ts         tiny external store + selector hook (useSyncExternalStore)
+    query.ts         stale-while-revalidate cache: dedupe, prefetch, invalidation
+    queries.ts       every server query as a cached hook, plus loaders and prefetchers
+    subsonic.ts      Subsonic/OpenSubsonic client, stream URLs, failover retry
     connection.ts    which server we are on, and keeping that answer correct
     endpoint.ts      the probe-and-race logic
-    subsonic.ts      Subsonic/OpenSubsonic client, raw-stream URLs, failover retry
-    lyrics.ts        fetch, parse (including enhanced word-timed LRC), cache, sync
+    lyrics.ts        fetch, parse (incl. word-timed LRC), choose, offset, cache
     romanize/        one module per script, plus the orchestrator
-    color.ts         palette extraction from artwork
-    md5.ts           Subsonic salted-token auth (WebCrypto has no MD5)
+    stats.ts         the listening log and its summaries (merges safely across tabs)
+    downloads.ts     offline storage in IndexedDB and blob playback
+    history.ts       recently played
   state/
-    player.tsx       dual-element playback engine, queue, Media Session, scrobbling
-    library.tsx      playlists and favourites, shared app-wide
-    settings.tsx     preferences
-    downloads.ts     offline storage in IndexedDB, and blob-URL playback
-    history.ts       local "Recently Played"
-  hooks/
-    useGestures.ts   swipe, long-press, sheet drag, pull-to-refresh, drag-reorder
-    useLayout.ts     compact vs regular shell
-  components/        interface, with mobile/ for the tab bar and mini player
+    player.ts        the playback engine and queue, as an external store
+    settings.ts      preferences, applied to the document as data attributes
+    ui.ts            menus, dialogs, palette, toasts, panels
+    library.ts       playlists and favourites
+    actions.ts       every user-facing action, with toasts and undo
+    menus.tsx        context menus for songs, albums, artists, playlists
+    shortcuts.ts     the keyboard table — the handler and the help sheet both read it
+    queueSync.ts     optional queue hand-off through the server
+    pins.ts          the pinned shelf
+  hooks/             layout, scroller + virtual rows, gestures, drop targets, data
+  components/
+    shell/           sidebar, deck, inspector, tab bar, mini player, network chip
+    player/          display, transport, full player, tape deck, lyrics, queue
+    overlays/        menu, dialogs, command palette, toasts
   routes/            pages
-  styles/            design tokens, liquid glass, layout, player, mobile shell
+  styles/            tokens, base, controls, shell, content, overlays, player, pages
 server/serve.mjs     static host with optional Subsonic proxy
 ```
 
 ### Playback engine
 
-Two `<audio>` elements take turns. While one plays, the other pre-buffers the next track starting
-20 seconds before the current one ends; at the track boundary the engine swaps to the element that
-is already loaded, so the gap between tracks is a swap rather than a fresh connection. Crossfade
-uses the same pair — the incoming track starts early and the two volumes ramp past each other.
+Two `<audio>` elements take turns. While one plays, the other pre-buffers the next track; at the
+boundary the engine swaps to the one already loaded, so the gap is a swap rather than a fresh
+connection. Crossfade uses the same pair with equal-power ramps. The elements stay out of the Web
+Audio graph on purpose — an `AudioContext` would resample everything to its own rate.
 
-The elements are deliberately kept out of the DOM and out of the Web Audio graph — routing through
-`AudioContext` would resample everything to the context's rate, which is exactly the loss this app
-exists to avoid.
-
-**Autoplay** keeps things going when the queue empties: it asks the server for songs similar to the
-last one played, falling back to a random pull from the same genre when there is no similarity data.
-
-**The sleep timer** counts down or waits for the end of the current track, then fades out over three
-seconds rather than cutting off.
-
----
-
-## Configuration
-
-Everything is in **Settings**:
-
-- **Playback** — lossless passthrough (on by default), scrobbling, autoplay, crossfade
-- **Lyrics** — romanization mode, whether to show the original script, pinyin tone marks
-- **Appearance** — theme, liquid glass, ambient artwork colour, reduce motion
-- **Servers** — add, edit, reorder and enable/disable addresses; see live probe results
-- **Downloads** — how much is stored on this device, and a way to clear it
-- **Library** — trigger a Navidrome rescan
-- **Account** — sign out
-
-Your password is never stored. Frequenzy derives Subsonic's salted MD5 token once at sign-in and
-keeps only the salt and token.
+The engine lives outside React. Components subscribe to exactly the slice they draw, and the
+playback position has a store of its own, so only the scrubber and clock redraw as a song plays.
 
 ---
 
@@ -246,6 +262,9 @@ keeps only the salt and token.
 
 Frequenzy ships a web manifest and icons, so it installs to the dock or home screen from any
 Chromium browser or iOS Safari ("Add to Home Screen") and runs without browser chrome.
+
+Your password is never stored: Frequenzy derives Subsonic's salted token at sign-in and keeps only
+the salt and token.
 
 ---
 

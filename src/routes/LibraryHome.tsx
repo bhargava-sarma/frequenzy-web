@@ -1,119 +1,104 @@
 /**
- * The Library tab on a phone.
- *
- * The sidebar's contents do not fit on a phone, so they become a list you drill
- * into — the same structure Apple Music uses under its Library tab, with the
- * most recently added albums shown underneath.
+ * The Library tab on a phone: the sidebar's contents as a list you drill
+ * into, with pinned things and playlists underneath.
  */
 
-import { AlbumCard, CardSkeleton } from '../components/Cards';
+import { AlbumCard, Grid, SkeletonCards } from '../components/Cards';
 import { Artwork } from '../components/Artwork';
-import { Page } from '../components/Page';
 import {
-  AlbumIcon, ArtistIcon, ChevronRightIcon, ClockIcon, DownloadIcon, GenreIcon,
-  HeartIcon, HistoryIcon, NoteIcon, PlaylistIcon, PlusIcon,
+  AlbumIcon, ArtistIcon, ChevronRightIcon, ClockIcon, DownloadIcon, GenreIcon, HeartIcon, HistoryIcon, NoteIcon,
+  PlaylistIcon, PlusIcon, SettingsIcon, StatsIcon,
 } from '../components/Icons';
+import { Page, Section } from '../components/Page';
+import { NetworkStatus } from '../components/shell/NetworkStatus';
 import { formatCount } from '../lib/format';
-import { getAlbumList } from '../lib/subsonic';
-import { useAsync } from '../hooks/useAsync';
-import { useDialogs } from '../state/dialogs';
-import { useLibrary } from '../state/library';
-import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
+import { navigate } from '../lib/nav';
+import { useAlbumList } from '../lib/queries';
+import * as act from '../state/actions';
+import { usePlaylists } from '../state/library';
+import { pinRoute, usePins } from '../state/pins';
+import { SeeAll } from './Home';
 
 const SECTIONS = [
-  { to: '/library/playlists', label: 'Playlists', icon: <PlaylistIcon /> },
-  { to: '/library/artists', label: 'Artists', icon: <ArtistIcon /> },
-  { to: '/library/albums', label: 'Albums', icon: <AlbumIcon /> },
-  { to: '/library/songs', label: 'Songs', icon: <NoteIcon /> },
-  { to: '/library/genres', label: 'Genres', icon: <GenreIcon /> },
-  { to: '/library/favourites', label: 'Favourites', icon: <HeartIcon /> },
-  { to: '/library/recent', label: 'Recently Added', icon: <ClockIcon /> },
-  { to: '/library/history', label: 'Recently Played', icon: <HistoryIcon /> },
-  { to: '/library/downloads', label: 'Downloaded', icon: <DownloadIcon /> },
+  { to: '/library/playlists', label: 'playlists', icon: <PlaylistIcon /> },
+  { to: '/library/albums', label: 'albums', icon: <AlbumIcon /> },
+  { to: '/library/artists', label: 'artists', icon: <ArtistIcon /> },
+  { to: '/library/songs', label: 'songs', icon: <NoteIcon /> },
+  { to: '/library/genres', label: 'genres', icon: <GenreIcon /> },
+  { to: '/library/favourites', label: 'favourites', icon: <HeartIcon /> },
+  { to: '/library/recent', label: 'recently added', icon: <ClockIcon /> },
+  { to: '/library/history', label: 'history', icon: <HistoryIcon /> },
+  { to: '/library/downloads', label: 'downloads', icon: <DownloadIcon /> },
+  { to: '/stats', label: 'stats', icon: <StatsIcon /> },
+  { to: '/settings', label: 'settings', icon: <SettingsIcon /> },
 ];
 
 export function LibraryHome() {
-  const navigate = useSmoothNavigate();
-  const { playlists, createPlaylist } = useLibrary();
-  const { prompt } = useDialogs();
-  const recent = useAsync((signal) => getAlbumList('newest', { size: 12 }, signal), []);
+  const playlists = usePlaylists();
+  const pins = usePins();
+  const recent = useAlbumList('newest', { size: 12 });
 
   return (
-    <Page title="Library">
-      <div className="fz-linklist fz-stagger-fast">
-        {SECTIONS.map((section) => (
-          <button key={section.to} type="button" className="fz-linkrow" onClick={() => navigate(section.to)}>
-            <span className="fz-linkrow__icon">{section.icon}</span>
-            <span className="fz-linkrow__label">{section.label}</span>
-            <ChevronRightIcon className="fz-linkrow__chevron" />
+    <Page root title="library" onRefresh={recent.reload} actions={<NetworkStatus compact />}>
+      <div className="linklist">
+        {SECTIONS.map((section, i) => (
+          <button key={section.to} type="button" className="linkrow" onClick={() => navigate(section.to)}>
+            <span className="linkrow__num tnum">{String(i + 1).padStart(2, '0')}</span>
+            <span className="linkrow__icon">{section.icon}</span>
+            <span className="linkrow__label">{section.label}</span>
+            <ChevronRightIcon className="linkrow__chev" />
           </button>
         ))}
       </div>
 
-      <section className="fz-section" style={{ marginTop: 26 }}>
-        <div className="fz-section__head">
-          <h2 className="fz-section__title">Your Playlists</h2>
-          <button
-            type="button"
-            className="fz-icon-btn"
-            style={{ marginLeft: 'auto' }}
-            aria-label="New playlist"
-            onClick={() =>
-              prompt({
-                title: 'New Playlist',
-                label: 'Name',
-                initialValue: 'New Playlist',
-                confirmLabel: 'Create',
-                onConfirm: (name) => void createPlaylist(name),
-              })
-            }
-          >
-            <PlusIcon />
-          </button>
-        </div>
-        {playlists.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            No playlists yet — make one with the + above.
-          </div>
-        ) : (
-          <div className="fz-linklist fz-stagger-fast">
-            {playlists.map((playlist) => (
-              <button
-                key={playlist.id}
-                type="button"
-                className="fz-linkrow"
-                onClick={() => navigate(`/playlist/${encodeURIComponent(playlist.id)}`)}
-              >
-                <Artwork
-                  coverArt={playlist.coverArt}
-                  name={playlist.name}
-                  size={120}
-                  className="fz-linkrow__art"
-                />
-                <span className="fz-linkrow__label">
-                  <span className="fz-truncate">{playlist.name}</span>
-                  <span className="fz-linkrow__sub">{formatCount(playlist.songCount, 'song')}</span>
+      {pins.length > 0 && (
+        <Section title="pinned">
+          <div className="linklist">
+            {pins.map((pin) => (
+              <button key={`${pin.type}:${pin.id}`} type="button" className="linkrow" onClick={() => navigate(pinRoute(pin))}>
+                <Artwork coverArt={pin.coverArt} name={pin.name} size={36} round={pin.type === 'artist'} className="linkrow__art" />
+                <span className="linkrow__label">
+                  <span className="truncate">{pin.name}</span>
+                  <span className="linkrow__sub">{pin.type}</span>
                 </span>
-                <ChevronRightIcon className="fz-linkrow__chevron" />
+                <ChevronRightIcon className="linkrow__chev" />
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <Section
+        title="playlists"
+        action={
+          <button type="button" className="section__link" onClick={() => act.promptNewPlaylist()}>
+            <PlusIcon /> new
+          </button>
+        }
+      >
+        {playlists.length === 0 ? (
+          <div className="tracks-empty">no playlists yet — make one with “new”.</div>
+        ) : (
+          <div className="linklist">
+            {playlists.slice(0, 30).map((playlist) => (
+              <button key={playlist.id} type="button" className="linkrow" onClick={() => navigate(`/playlist/${encodeURIComponent(playlist.id)}`)}>
+                <Artwork coverArt={playlist.coverArt} name={playlist.name} size={36} className="linkrow__art" />
+                <span className="linkrow__label">
+                  <span className="truncate">{playlist.name}</span>
+                  <span className="linkrow__sub">{formatCount(playlist.songCount, 'song')}</span>
+                </span>
+                <ChevronRightIcon className="linkrow__chev" />
               </button>
             ))}
           </div>
         )}
-      </section>
+      </Section>
 
-      <section className="fz-section">
-        <div className="fz-section__head">
-          <h2 className="fz-section__title">Recently Added</h2>
-          <button type="button" className="fz-section__link" style={{ opacity: 1 }} onClick={() => navigate('/library/recent')}>
-            See All
-          </button>
-        </div>
-        <div className="fz-grid">
-          {recent.loading
-            ? Array.from({ length: 6 }, (_, i) => <CardSkeleton key={i} />)
-            : (recent.data ?? []).slice(0, 6).map((album) => <AlbumCard key={album.id} album={album} />)}
-        </div>
-      </section>
+      <Section title="recently added" action={<SeeAll to="/library/recent" />}>
+        <Grid>
+          {recent.loading ? <SkeletonCards count={4} /> : (recent.data ?? []).slice(0, 6).map((album) => <AlbumCard key={album.id} album={album} />)}
+        </Grid>
+      </Section>
     </Page>
   );
 }

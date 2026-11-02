@@ -285,6 +285,21 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
 
   let result: Lyrics | null = null;
 
+  // A sheet the listener picked by hand beats anything we would guess.
+  const chosen = overrides()[song.id];
+  if (chosen) {
+    try {
+      const record = (await lrclibFetch(`/get/${chosen}`, signal)) as LrclibRecord | null;
+      result = record ? fromLrclib(record) : null;
+      if (result) {
+        cache.set(song.id, result);
+        return result;
+      }
+    } catch {
+      /* fall back to the usual sources */
+    }
+  }
+
   try {
     const server = await getLyricsBySongId(song.id, signal);
     result = fromServerLyrics(server);
@@ -336,4 +351,112 @@ export function activeLineIndex(lines: LyricLine[], time: number, offset = 0): n
     }
   }
   return found;
+}
+
+/* -------------------------------------------------------- manual matching */
+
+export interface LyricsCandidate {
+  id: number;
+  track: string;
+  artist: string;
+  album: string;
+  duration: number;
+  synced: boolean;
+  instrumental: boolean;
+  preview: string;
+}
+
+/** Search LRCLIB by hand, for when the automatic match is wrong or missing. */
+export async function searchLyrics(query: { track: string; artist?: string }, signal?: AbortSignal): Promise<LyricsCandidate[]> {
+  const params = new URLSearchParams({ track_name: query.track });
+  if (query.artist) params.set('artist_name', query.artist);
+  const results = (await lrclibFetch(`/search?${params}`, signal)) as LrclibRecord[] | null;
+  if (!Array.isArray(results)) return [];
+  return results.slice(0, 30).map((r) => {
+    const text = (r.plainLyrics ?? r.syncedLyrics?.replace(/\[[^\]]*\]/g, '') ?? '').trim();
+    return {
+      id: r.id,
+      track: r.trackName,
+      artist: r.artistName,
+      album: r.albumName,
+      duration: r.duration,
+      synced: Boolean(r.syncedLyrics),
+      instrumental: r.instrumental,
+      preview: text.split(/\r?\n/).filter(Boolean).slice(0, 2).join(' / '),
+    };
+  });
+}
+
+const OVERRIDES_KEY = 'frequenzy.lyricsChoice.v1';
+const OFFSETS_KEY = 'frequenzy.lyricsOffset.v1';
+
+function readMap<T>(key: string): Record<string, T> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMap<T>(key: string, map: Record<string, T>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
+
+function overrides(): Record<string, number> {
+  return readMap<number>(OVERRIDES_KEY);
+}
+
+/** Remember an LRCLIB sheet for a song, and use it from now on. */
+export function chooseLyrics(songId: string, lrclibId: number | null): void {
+  const map = overrides();
+  if (lrclibId === null) delete map[songId];
+  else map[songId] = lrclibId;
+  writeMap(OVERRIDES_KEY, map);
+  cache.delete(songId);
+  revision += 1;
+  for (const fn of [...revisionListeners]) fn();
+}
+
+let revision = 0;
+const revisionListeners = new Set<() => void>();
+
+/** Bumped whenever a sheet is chosen by hand, so open views reload. */
+export function lyricsRevision(): number {
+  return revision;
+}
+
+export function subscribeLyricsRevision(fn: () => void): () => void {
+  revisionListeners.add(fn);
+  return () => {
+    revisionListeners.delete(fn);
+  };
+}
+
+export function hasChosenLyrics(songId: string): boolean {
+  return overrides()[songId] !== undefined;
+}
+
+/**
+ * A per-song nudge, in seconds, for sheets that run early or late. Positive
+ * means the words come later.
+ */
+export function lyricsOffset(songId: string): number {
+  const value = readMap<number>(OFFSETS_KEY)[songId];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+export function setLyricsOffset(songId: string, seconds: number): void {
+  const map = readMap<number>(OFFSETS_KEY);
+  const rounded = Math.round(seconds * 10) / 10;
+  if (rounded === 0) delete map[songId];
+  else map[songId] = rounded;
+  // Keep the map from growing without bound.
+  const keys = Object.keys(map);
+  if (keys.length > 500) for (const key of keys.slice(0, keys.length - 500)) delete map[key];
+  writeMap(OFFSETS_KEY, map);
 }

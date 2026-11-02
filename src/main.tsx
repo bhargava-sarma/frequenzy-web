@@ -2,33 +2,31 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
-import { App } from './App';
-import { startPerfMonitor } from './lib/perf';
-import { SettingsProvider } from './state/settings';
+import '@fontsource-variable/space-grotesk/wght.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+import '@fontsource-variable/doto/wght.css';
 import './styles/index.css';
+
+// Settings apply themselves to the document on import, before the first paint.
+import './state/settings';
+import { App } from './App';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root');
 
 createRoot(container).render(
   <StrictMode>
-    <SettingsProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </SettingsProvider>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </StrictMode>,
 );
 
-// Decide how much of the show this device can put on, then keep watching the
-// frame clock and turn it down if it cannot keep up.
-startPerfMonitor();
-
-// Fade out the splash once React has painted something.
+// Fade the boot screen once React has painted something.
 requestAnimationFrame(() => {
   requestAnimationFrame(() => {
     const boot = document.getElementById('fz-boot');
     boot?.classList.add('fz-boot-done');
-    setTimeout(() => boot?.remove(), 600);
+    setTimeout(() => boot?.remove(), 400);
   });
 });

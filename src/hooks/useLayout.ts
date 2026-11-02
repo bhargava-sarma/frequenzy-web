@@ -1,51 +1,51 @@
 /**
- * Which shell the app should wear.
+ * Which shell the app should wear, and what kind of pointer is driving it.
  *
- * Mobile and desktop are genuinely different products here — a tab bar and a
- * sheet player versus a sidebar and a docked bar — so this is a mode, not a
- * pile of breakpoints scattered through the CSS.
+ * Mobile and desktop are genuinely different arrangements here — a tab bar
+ * and a sheet player versus a sidebar and a docked deck — so this is a mode,
+ * not a pile of breakpoints scattered through components. Each query has one
+ * shared listener, however many components ask.
  */
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
-export type LayoutMode = 'compact' | 'regular';
+const COMPACT = '(max-width: 899px)';
+const TOUCH = '(hover: none) and (pointer: coarse)';
+const WIDE = '(min-width: 1280px)';
 
-const COMPACT_MAX = 899;
-
-function query(): string {
-  return `(max-width: ${COMPACT_MAX}px)`;
+function mediaStore(query: string) {
+  const media = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query) : null;
+  return {
+    get: () => media?.matches ?? false,
+    subscribe(listener: () => void) {
+      media?.addEventListener('change', listener);
+      return () => media?.removeEventListener('change', listener);
+    },
+  };
 }
 
-export function useLayoutMode(): LayoutMode {
-  const [mode, setMode] = useState<LayoutMode>(() =>
-    typeof window !== 'undefined' && window.matchMedia(query()).matches ? 'compact' : 'regular',
-  );
-
-  useEffect(() => {
-    const media = window.matchMedia(query());
-    const apply = () => setMode(media.matches ? 'compact' : 'regular');
-    apply();
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, []);
-
-  return mode;
-}
+const compactStore = mediaStore(COMPACT);
+const touchStore = mediaStore(TOUCH);
+const wideStore = mediaStore(WIDE);
 
 export function useIsCompact(): boolean {
-  return useLayoutMode() === 'compact';
+  return useSyncExternalStore(compactStore.subscribe, compactStore.get, compactStore.get);
 }
 
 /** True on devices whose primary input is a finger — drives gesture affordances. */
 export function useIsTouch(): boolean {
-  const [touch, setTouch] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches,
-  );
-  useEffect(() => {
-    const media = window.matchMedia('(hover: none) and (pointer: coarse)');
-    const apply = () => setTouch(media.matches);
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, []);
-  return touch;
+  return useSyncExternalStore(touchStore.subscribe, touchStore.get, touchStore.get);
+}
+
+/** Wide enough for the side panel to take its own column rather than float. */
+export function useIsWide(): boolean {
+  return useSyncExternalStore(wideStore.subscribe, wideStore.get, wideStore.get);
+}
+
+export function isCompactNow(): boolean {
+  return compactStore.get();
+}
+
+export function isTouchNow(): boolean {
+  return touchStore.get();
 }

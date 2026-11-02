@@ -1,165 +1,212 @@
 /**
  * The shell.
  *
- * Two genuinely different arrangements share one set of routes: a sidebar with
- * a docked transport on desktop, a tab bar with a mini player and a sheet
- * player on a phone. Which one you get is a layout mode, not a pile of
- * breakpoints inside every component.
+ * Two genuinely different arrangements share one set of routes: a sidebar,
+ * a docked deck and a side panel on a desktop; a tab bar, a mini player and a
+ * sheet player on a phone. Every page scrolls inside one element, so a
+ * position can be put back when you go Back.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { AmbientBackdrop } from './components/AmbientBackdrop';
-import { FullPlayer, type PlayerPanel } from './components/FullPlayer';
 import { LoginScreen } from './components/LoginScreen';
-import { NowPlayingBar } from './components/NowPlayingBar';
-import { Sidebar } from './components/Sidebar';
-import { MiniPlayer } from './components/mobile/MiniPlayer';
-import { TabBar } from './components/mobile/TabBar';
+import { Spinner } from './components/controls';
+import { MenuHost } from './components/overlays/Menu';
+import { DialogHost } from './components/overlays/Dialogs';
+import { PaletteHost } from './components/overlays/Palette';
+import { ToastHost } from './components/overlays/Toasts';
+import { FullPlayerHost } from './components/player/FullPlayer';
+import { Deck } from './components/shell/Deck';
+import { Inspector } from './components/shell/Inspector';
+import { MiniPlayer } from './components/shell/MiniPlayer';
+import { Sidebar } from './components/shell/Sidebar';
+import { TabBar } from './components/shell/TabBar';
 import { connection } from './lib/connection';
-import { isAuthenticated } from './lib/subsonic';
-import { useIsCompact } from './hooks/useLayout';
+import { registerNavigate } from './lib/nav';
+import { usePullToRefresh } from './hooks/useGestures';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { AlbumDetail } from './routes/AlbumDetail';
-import { ArtistDetail } from './routes/ArtistDetail';
+import { useIsCompact, useIsTouch, useIsWide } from './hooks/useLayout';
+import { ScrollerProvider, useScrollRestoration } from './hooks/useScroller';
+import { Home } from './routes/Home';
 import { Browse } from './routes/Browse';
-import { Downloads } from './routes/Downloads';
-import {
-  GenreDetail, LibraryAlbums, LibraryArtists, LibraryFavourites, LibraryGenres,
-  LibraryHistory, LibraryPlaylists, LibraryRecent, LibrarySongs,
-} from './routes/Library';
-import { LibraryHome } from './routes/LibraryHome';
-import { ListenNow } from './routes/ListenNow';
-import { PlaylistDetail } from './routes/PlaylistDetail';
 import { Radio } from './routes/Radio';
 import { Search } from './routes/Search';
-import { Settings } from './routes/Settings';
-import { AmbientProvider } from './state/ambient';
-import { DialogsProvider } from './state/dialogs';
-import { LibraryProvider } from './state/library';
-import { PlayerProvider, usePlayer } from './state/player';
+import { LibraryHome } from './routes/LibraryHome';
+import {
+  Albums, Artists, Favourites, GenreDetail, Genres, History, Playlists, RecentlyAdded, Songs,
+} from './routes/Library';
+import { AlbumDetail } from './routes/AlbumDetail';
+import { ArtistDetail } from './routes/ArtistDetail';
+import { PlaylistDetail } from './routes/PlaylistDetail';
+import { Downloads } from './routes/Downloads';
+import { startLibrary } from './state/library';
+import { usePlayer } from './state/player';
+import { startQueueSync } from './state/queueSync';
+import { useSignedIn } from './state/session';
+import { ui, useUI } from './state/ui';
+
+// The rarely visited, heavier pages load on demand.
+const Settings = lazy(() => import('./routes/Settings').then((m) => ({ default: m.Settings })));
+const Stats = lazy(() => import('./routes/Stats').then((m) => ({ default: m.Stats })));
 
 export function App() {
-  const [signedIn, setSignedIn] = useState(isAuthenticated);
-
+  const signedIn = useSignedIn();
   useEffect(() => {
-    if (signedIn) connection.start();
-  }, [signedIn]);
-
-  if (!signedIn) {
-    return <LoginScreen onSignedIn={() => setSignedIn(true)} />;
-  }
-
-  return (
-    <PlayerProvider>
-      <AmbientProvider>
-        <LibraryProvider enabled={signedIn}>
-          <DialogsProvider>
-            <AmbientBackdrop />
-            <Shell onSignedOut={() => setSignedIn(false)} />
-          </DialogsProvider>
-        </LibraryProvider>
-      </AmbientProvider>
-    </PlayerProvider>
-  );
+    connection.start();
+  }, []);
+  if (!signedIn) return <LoginScreen />;
+  return <Shell />;
 }
 
-function AppRoutes({ onSignedOut, onMenuClick }: { onSignedOut: () => void; onMenuClick?: () => void }) {
+function Shell() {
   const compact = useIsCompact();
-
-  return (
-    <Routes>
-      <Route path="/" element={<ListenNow onMenuClick={onMenuClick} />} />
-      <Route path="/browse" element={<Browse onMenuClick={onMenuClick} />} />
-      <Route path="/radio" element={<Radio onMenuClick={onMenuClick} />} />
-      <Route path="/search" element={<Search onMenuClick={onMenuClick} />} />
-      {/* The Library index only exists on a phone; on desktop the sidebar is it. */}
-      <Route path="/library" element={compact ? <LibraryHome /> : <Navigate to="/library/albums" replace />} />
-      <Route path="/library/recent" element={<LibraryRecent onMenuClick={onMenuClick} />} />
-      <Route path="/library/artists" element={<LibraryArtists onMenuClick={onMenuClick} />} />
-      <Route path="/library/albums" element={<LibraryAlbums onMenuClick={onMenuClick} />} />
-      <Route path="/library/songs" element={<LibrarySongs onMenuClick={onMenuClick} />} />
-      <Route path="/library/genres" element={<LibraryGenres onMenuClick={onMenuClick} />} />
-      <Route path="/library/favourites" element={<LibraryFavourites onMenuClick={onMenuClick} />} />
-      <Route path="/library/history" element={<LibraryHistory onMenuClick={onMenuClick} />} />
-      <Route path="/library/playlists" element={<LibraryPlaylists onMenuClick={onMenuClick} />} />
-      <Route path="/library/downloads" element={<Downloads onMenuClick={onMenuClick} />} />
-      <Route path="/album/:id" element={<AlbumDetail />} />
-      <Route path="/artist/:id" element={<ArtistDetail />} />
-      <Route path="/playlist/:id" element={<PlaylistDetail />} />
-      <Route path="/genre/:name" element={<GenreDetail />} />
-      <Route path="/settings" element={<Settings onSignedOut={onSignedOut} onMenuClick={onMenuClick} />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-}
-
-function Shell({ onSignedOut }: { onSignedOut: () => void }) {
-  const navigate = useNavigate();
+  const wide = useIsWide();
+  const inspector = useUI((s) => s.inspector);
+  const hasCurrent = usePlayer((s) => s.current !== null);
+  const routerNavigate = useNavigate();
   const location = useLocation();
-  const compact = useIsCompact();
-  const { current } = usePlayer();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [fullPlayer, setFullPlayer] = useState(false);
-  const [panel, setPanel] = useState<PlayerPanel>('none');
-
-  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
-
-  const toggleFullPlayer = useCallback(() => {
-    if (current) setFullPlayer((open) => !open);
-  }, [current]);
-
-  const focusSearch = useCallback(() => navigate('/search'), [navigate]);
-
-  useKeyboardShortcuts({ onToggleFullPlayer: toggleFullPlayer, onFocusSearch: focusSearch });
-
-  // The player covers the whole screen on a phone; navigating underneath it
-  // would leave you looking at the wrong thing when it closes.
   useEffect(() => {
-    if (compact) setFullPlayer(false);
+    registerNavigate((to, options) => (typeof to === 'number' ? routerNavigate(to) : routerNavigate(to, options)));
+    return () => registerNavigate(null);
+  }, [routerNavigate]);
+
+  useEffect(() => {
+    startLibrary();
+    startQueueSync();
+  }, []);
+
+  useKeyboardShortcuts();
+
+  // Moving somewhere closes whatever was floating over the old page.
+  useEffect(() => {
+    ui.closeMenu();
+    if (compact) ui.closeFullPlayer();
   }, [compact, location.pathname]);
 
-  // Nothing to expand once the queue is empty.
+  const docked = !compact && inspector !== null && wide;
+
+  // Floating things outside the shell (toasts, the selection bar) place
+  // themselves by these.
   useEffect(() => {
-    if (!current) setFullPlayer(false);
-  }, [current]);
-
-  const changePanel = useCallback(
-    (next: PlayerPanel) => {
-      setPanel(next);
-      if (next !== 'none' && current) setFullPlayer(true);
-    },
-    [current],
-  );
-
-  if (compact) {
-    return (
-      <>
-        <div className="fz-app fz-app--compact">
-          <AppRoutes onSignedOut={onSignedOut} />
-          {current && <MiniPlayer onExpand={() => setFullPlayer(true)} />}
-          <TabBar />
-        </div>
-        {fullPlayer && current && (
-          <FullPlayer panel={panel} onPanelChange={setPanel} onClose={() => setFullPlayer(false)} />
-        )}
-      </>
-    );
-  }
+    const root = document.documentElement;
+    root.dataset.layout = compact ? 'compact' : 'desktop';
+    root.dataset.mini = compact && hasCurrent ? 'on' : 'off';
+  }, [compact, hasCurrent]);
 
   return (
-    <>
-      <div className="fz-app">
-        <Sidebar open={sidebarOpen} onNavigate={closeSidebar} />
-        {sidebarOpen && <div className="fz-scrim" onClick={closeSidebar} />}
-        <AppRoutes onSignedOut={onSignedOut} onMenuClick={() => setSidebarOpen(true)} />
-        <NowPlayingBar onExpand={() => setFullPlayer(true)} panel={panel} onPanelChange={changePanel} />
-      </div>
-      {fullPlayer && current && (
-        <FullPlayer panel={panel} onPanelChange={setPanel} onClose={() => setFullPlayer(false)} />
+    <div
+      className={`app ${compact ? 'app--compact' : 'app--desktop'} ${docked ? 'has-inspector' : ''} ${
+        compact && hasCurrent ? 'has-mini' : ''
+      }`}
+    >
+      {!compact && <Sidebar />}
+      <Main />
+      {!compact && <Inspector />}
+      {compact ? (
+        <>
+          <MiniPlayer />
+          <TabBar />
+        </>
+      ) : (
+        <Deck />
       )}
-    </>
+      <FullPlayerHost />
+      <MenuHost />
+      <DialogHost />
+      <PaletteHost />
+      <ToastHost />
+    </div>
+  );
+}
+
+function Main() {
+  const ref = useRef<HTMLElement | null>(null);
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  const refresh = useRef<(() => Promise<unknown> | void) | null>(null);
+  const [refreshable, setRefreshable] = useState(false);
+  const touch = useIsTouch();
+
+  const setRef = useCallback((node: HTMLElement | null) => {
+    ref.current = node;
+    setElement(node);
+  }, []);
+
+  const registerRefresh = useCallback((fn: (() => Promise<unknown> | void) | null) => {
+    refresh.current = fn;
+    setRefreshable(fn !== null);
+  }, []);
+
+  useScrollRestoration(ref);
+  const pull = usePullToRefresh(ref, refresh, touch && refreshable);
+
+  return (
+    <main className="main" ref={setRef} id="main" tabIndex={-1}>
+      {(pull.pull > 0 || pull.refreshing) && (
+        <div
+          className={`pull ${pull.ready ? 'is-ready' : ''} ${pull.refreshing ? 'is-refreshing' : ''}`}
+          style={{ transform: `translate(-50%, ${Math.min(pull.pull, 80) - 34}px)`, opacity: Math.min(1, pull.pull / 40) }}
+          aria-hidden="true"
+        >
+          <span className="pull__dial" style={{ transform: `rotate(${pull.pull * 4}deg)` }} />
+        </div>
+      )}
+      <div className="main__inner" style={pull.pull > 0 ? { transform: `translate3d(0, ${pull.pull}px, 0)` } : undefined}>
+        <ScrollerProvider element={element} onRefreshChange={registerRefresh}>
+          <Suspense fallback={<PageFallback />}>
+            <AppRoutes />
+          </Suspense>
+        </ScrollerProvider>
+      </div>
+    </main>
+  );
+}
+
+function PageFallback() {
+  return (
+    <div className="page-fallback">
+      <Spinner large />
+    </div>
+  );
+}
+
+/** Remount a detail page when its id changes, so no state leaks between items. */
+function Keyed({ children }: { children: (id: string) => ReactNode }) {
+  const params = useParams();
+  const id = params.id ?? params.name ?? '';
+  return <KeyedInner key={id}>{children(decodeURIComponent(id))}</KeyedInner>;
+}
+
+function KeyedInner({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+function AppRoutes() {
+  const compact = useIsCompact();
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/browse" element={<Browse />} />
+      <Route path="/radio" element={<Radio />} />
+      <Route path="/search" element={<Search />} />
+      <Route path="/stats" element={<Stats />} />
+      <Route path="/library" element={compact ? <LibraryHome /> : <Navigate to="/library/albums" replace />} />
+      <Route path="/library/albums" element={<Albums />} />
+      <Route path="/library/artists" element={<Artists />} />
+      <Route path="/library/songs" element={<Songs />} />
+      <Route path="/library/genres" element={<Genres />} />
+      <Route path="/library/playlists" element={<Playlists />} />
+      <Route path="/library/favourites" element={<Favourites />} />
+      <Route path="/library/recent" element={<RecentlyAdded />} />
+      <Route path="/library/history" element={<History />} />
+      <Route path="/library/downloads" element={<Downloads />} />
+      <Route path="/album/:id" element={<Keyed>{(id) => <AlbumDetail id={id} />}</Keyed>} />
+      <Route path="/artist/:id" element={<Keyed>{(id) => <ArtistDetail id={id} />}</Keyed>} />
+      <Route path="/playlist/:id" element={<Keyed>{(id) => <PlaylistDetail id={id} />}</Keyed>} />
+      <Route path="/genre/:name" element={<Keyed>{(name) => <GenreDetail genre={name} />}</Keyed>} />
+      <Route path="/settings" element={<Settings />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

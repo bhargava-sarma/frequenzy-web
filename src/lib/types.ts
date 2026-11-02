@@ -43,6 +43,11 @@ export interface Song {
   artists?: { id: string; name: string }[];
   albumArtists?: { id: string; name: string }[];
   displayArtist?: string;
+  bpm?: number;
+  /** Client-side: an internet radio station dressed up as a song. */
+  isRadio?: boolean;
+  /** Client-side: where a radio station streams from. */
+  streamUrl?: string;
 }
 
 export interface Album {
@@ -121,4 +126,37 @@ export interface ScanStatus {
   count?: number;
   folderCount?: number;
   lastScan?: string;
+}
+
+export interface AlbumInfo {
+  notes?: string;
+  musicBrainzId?: string;
+  lastFmUrl?: string;
+  smallImageUrl?: string;
+  mediumImageUrl?: string;
+  largeImageUrl?: string;
+}
+
+export interface InternetRadioStation {
+  id: string;
+  name: string;
+  streamUrl: string;
+  homePageUrl?: string;
+}
+
+export interface PlayQueue {
+  current?: string;
+  /** Milliseconds into the current track. */
+  position?: number;
+  username?: string;
+  changed?: string;
+  changedBy?: string;
+  entry?: Song[];
+}
+
+export interface ServerInfo {
+  serverVersion?: string;
+  type?: string;
+  openSubsonic?: boolean;
+  version?: string;
 }
