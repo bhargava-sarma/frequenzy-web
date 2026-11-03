@@ -1,32 +1,36 @@
 /**
  * Search across artists, albums and songs.
  *
- * Queries are debounced, results are tabbed, and what you searched for is
- * remembered — on a phone the recent list is the whole screen until you type,
- * which is the only thing that makes search usable one-handed.
+ * The query lives in the URL — replaced as you type rather than pushed, so
+ * Back leaves search instead of stepping through every keystroke. What you
+ * searched for is remembered; on a phone that list is the whole screen until
+ * you type.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { AlbumCard, ArtistCard, CardSkeleton } from '../components/Cards';
-import { Page } from '../components/Page';
+import { AlbumCard, ArtistCard, Grid, SkeletonCards } from '../components/Cards';
+import { Artwork } from '../components/Artwork';
+import { Segmented } from '../components/controls';
+import { CloseIcon, HistoryIcon, PlayIcon, SearchIcon } from '../components/Icons';
+import { Empty, Page, Section } from '../components/Page';
 import { TrackList } from '../components/TrackList';
-import { CloseIcon, HistoryIcon, SearchIcon } from '../components/Icons';
-import { search } from '../lib/subsonic';
-import { useAsync } from '../hooks/useAsync';
-import { useIsCompact } from '../hooks/useLayout';
+import { albumArtist } from '../lib/format';
+import { navigate } from '../lib/nav';
+import { useSearch } from '../lib/queries';
+import { artistCover } from '../lib/song';
+import * as act from '../state/actions';
 
 type Tab = 'all' | 'songs' | 'albums' | 'artists';
 
 const RECENT_KEY = 'frequenzy.recentSearches.v1';
-const RECENT_LIMIT = 12;
+const RECENT_LIMIT = 14;
 
 function loadRecent(): string[] {
   try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
   } catch {
     return [];
   }
@@ -40,45 +44,37 @@ function saveRecent(list: string[]) {
   }
 }
 
-export function Search({ onMenuClick }: { onMenuClick?: () => void }) {
+export function Search() {
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
   const [draft, setDraft] = useState(query);
   const [tab, setTab] = useState<Tab>('all');
   const [recent, setRecent] = useState<string[]>(loadRecent);
-  const compact = useIsCompact();
+  const input = useRef<HTMLInputElement | null>(null);
 
+  // Typing elsewhere (the palette, Back) changes the URL; follow it.
   useEffect(() => setDraft(query), [query]);
 
-  // Debounce so a fast typist does not fire a request per keystroke.
   useEffect(() => {
-    if (draft === query) return;
+    if (draft.trim() === query) return;
     const handle = setTimeout(() => {
       setParams(draft.trim() ? { q: draft.trim() } : {}, { replace: true });
-    }, 260);
+    }, 220);
     return () => clearTimeout(handle);
   }, [draft, query, setParams]);
 
-  const results = useAsync(
-    (signal) => search(query, { artistCount: 20, albumCount: 40, songCount: 60 }, signal),
-    [query],
-    { skip: query.trim().length === 0 },
-  );
+  const results = useSearch(query, { artistCount: 24, albumCount: 48, songCount: 100 });
+  const data = query ? results.data : undefined;
+  const total = (data?.song.length ?? 0) + (data?.album.length ?? 0) + (data?.artist.length ?? 0);
 
-  const total = useMemo(
-    () =>
-      (results.data?.song.length ?? 0) + (results.data?.album.length ?? 0) + (results.data?.artist.length ?? 0),
-    [results.data],
-  );
-
-  // Only remember searches that actually found something.
+  // Only remember searches that found something.
   useEffect(() => {
     const term = query.trim();
     if (!term || results.loading || total === 0) return;
     setRecent((prev) => {
-      const next = [term, ...prev.filter((item) => item.toLowerCase() !== term.toLowerCase())];
+      const next = [term, ...prev.filter((item) => item.toLowerCase() !== term.toLowerCase())].slice(0, RECENT_LIMIT);
       saveRecent(next);
-      return next.slice(0, RECENT_LIMIT);
+      return next;
     });
   }, [query, results.loading, total]);
 
@@ -90,136 +86,194 @@ export function Search({ onMenuClick }: { onMenuClick?: () => void }) {
     });
   }, []);
 
-  const hasResults = total > 0;
+  /** The single most likely thing you meant: an exact name match first. */
+  const top = useMemo(() => {
+    if (!data) return null;
+    const q = query.trim().toLowerCase();
+    const artist = data.artist.find((a) => a.name.toLowerCase() === q) ?? null;
+    if (artist) return { kind: 'artist' as const, artist };
+    const album = data.album.find((a) => a.name.toLowerCase() === q) ?? null;
+    if (album) return { kind: 'album' as const, album };
+    if (data.artist[0]) return { kind: 'artist' as const, artist: data.artist[0] };
+    if (data.album[0]) return { kind: 'album' as const, album: data.album[0] };
+    return null;
+  }, [data, query]);
+
+  const context = useMemo(() => ({ kind: 'Search', name: query }), [query]);
+  const songs = useMemo(() => (tab === 'all' ? (data?.song ?? []).slice(0, 10) : (data?.song ?? [])), [data, tab]);
 
   return (
-    <Page
-      title={query ? `Results for “${query}”` : 'Search'}
-      subtitle={query ? undefined : 'Find anything in your library.'}
-      onMenuClick={onMenuClick}
-    >
-      <div style={{ maxWidth: compact ? undefined : 460, marginBottom: 22 }}>
-        <div className="fz-input" style={{ height: compact ? 40 : 36 }}>
+    <Page root title={query ? `“${query}”` : 'search'} head={<div className="page-head"><h1 className="page-head__title">search</h1></div>}>
+      <div className="search-box">
+        <div className="input input--lg">
           <SearchIcon />
           <input
+            ref={input}
             type="search"
-            autoFocus={!compact}
+            autoFocus
             value={draft}
-            placeholder="Artists, albums, songs"
+            placeholder="artists, albums, songs"
             aria-label="Search"
+            enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && draft) {
+                event.stopPropagation();
+                setDraft('');
+              }
+            }}
           />
           {draft && (
             <button
               type="button"
-              className="fz-icon-btn"
-              style={{ width: 26, height: 26 }}
+              className="ibtn ibtn--sm"
               aria-label="Clear search"
-              onClick={() => setDraft('')}
+              onClick={() => {
+                setDraft('');
+                input.current?.focus();
+              }}
             >
-              <CloseIcon style={{ width: 14, height: 14 }} />
+              <CloseIcon />
             </button>
           )}
         </div>
+        {query && total > 0 && (
+          <Segmented<Tab>
+            label="Show"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'all' as Tab, label: 'all' },
+              { value: 'songs' as Tab, label: `songs ${data?.song.length ?? 0}`, count: data?.song.length ?? 0 },
+              { value: 'albums' as Tab, label: `albums ${data?.album.length ?? 0}`, count: data?.album.length ?? 0 },
+              { value: 'artists' as Tab, label: `artists ${data?.artist.length ?? 0}`, count: data?.artist.length ?? 0 },
+            ].filter((option) => option.count === undefined || option.count > 0)}
+          />
+        )}
       </div>
 
       {!query && recent.length > 0 && (
-        <section className="fz-section">
-          <div className="fz-section__head">
-            <h2 className="fz-section__title">Recently Searched</h2>
+        <Section
+          title="recent searches"
+          action={
             <button
               type="button"
-              className="fz-section__link"
-              style={{ opacity: 1 }}
+              className="section__link"
               onClick={() => {
                 setRecent([]);
                 saveRecent([]);
               }}
             >
-              Clear
+              clear
             </button>
-          </div>
-          <div className="fz-rows">
+          }
+        >
+          <div className="recents">
             {recent.map((term) => (
-              <div key={term} className="fz-row" style={{ paddingRight: 4 }}>
-                <span className="fz-linkrow__icon"><HistoryIcon /></span>
-                <button
-                  type="button"
-                  className="fz-row__text"
-                  style={{ textAlign: 'left' }}
-                  onClick={() => setDraft(term)}
-                >
-                  <span className="fz-row__title fz-truncate">{term}</span>
+              <div key={term} className="recents__row">
+                <button type="button" className="recents__term" onClick={() => setDraft(term)}>
+                  <HistoryIcon />
+                  <span className="truncate">{term}</span>
                 </button>
-                <button
-                  type="button"
-                  className="fz-icon-btn"
-                  aria-label={`Remove ${term} from recent searches`}
-                  onClick={() => removeRecent(term)}
-                >
+                <button type="button" className="ibtn ibtn--sm" aria-label={`Forget ${term}`} onClick={() => removeRecent(term)}>
                   <CloseIcon />
                 </button>
               </div>
             ))}
           </div>
-        </section>
+        </Section>
       )}
 
-      {query && hasResults && (
-        <div className="fz-segmented" style={{ marginBottom: 20 }}>
-          {(['all', 'songs', 'albums', 'artists'] as Tab[]).map((value) => (
-            <button key={value} type="button" className={tab === value ? 'is-active' : ''} onClick={() => setTab(value)}>
-              {value[0].toUpperCase() + value.slice(1)}
+      {!query && recent.length === 0 && (
+        <Empty icon={<SearchIcon />} title="find anything">
+          Search the whole library by artist, album or song. Anywhere in the app, press <kbd className="kbd">/</kbd> or{' '}
+          <kbd className="kbd">⌘K</kbd>.
+        </Empty>
+      )}
+
+      {query && results.loading && (
+        <Grid>
+          <SkeletonCards count={6} />
+        </Grid>
+      )}
+
+      {query && !results.loading && total === 0 && (
+        <Empty icon={<SearchIcon />} title="no results">
+          Nothing in the library matches “{query}”.
+        </Empty>
+      )}
+
+      {data && tab === 'all' && top && (
+        <Section title="top result">
+          <div className="top-result">
+            {top.kind === 'artist' ? (
+              <button type="button" className="top-result__card" onClick={() => navigate(`/artist/${encodeURIComponent(top.artist.id)}`)}>
+                <Artwork coverArt={artistCover(top.artist)} name={top.artist.name} size={96} round className="top-result__art" />
+                <span className="top-result__text">
+                  <span className="label">artist</span>
+                  <span className="top-result__title truncate">{top.artist.name}</span>
+                </span>
+              </button>
+            ) : (
+              <button type="button" className="top-result__card" onClick={() => navigate(`/album/${encodeURIComponent(top.album.id)}`)}>
+                <Artwork coverArt={top.album.coverArt} name={top.album.name} size={96} className="top-result__art" />
+                <span className="top-result__text">
+                  <span className="label">album · {albumArtist(top.album)}</span>
+                  <span className="top-result__title truncate">{top.album.name}</span>
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="key key--primary"
+              onClick={() =>
+                top.kind === 'artist' ? void act.playArtist(top.artist, { shuffle: true }) : void act.playAlbum(top.album)
+              }
+            >
+              <PlayIcon /> play
             </button>
-          ))}
-        </div>
+          </div>
+        </Section>
       )}
 
-      {results.loading && (
-        <div className="fz-grid fz-stagger">
-          {Array.from({ length: 10 }, (_, i) => <CardSkeleton key={i} />)}
-        </div>
+      {data && (tab === 'all' || tab === 'songs') && data.song.length > 0 && (
+        <Section
+          title="songs"
+          action={
+            tab === 'all' && data.song.length > 10 ? (
+              <button type="button" className="section__link" onClick={() => setTab('songs')}>
+                all {data.song.length} →
+              </button>
+            ) : undefined
+          }
+        >
+          <TrackList songs={songs} context={context} sortable={tab === 'songs'} />
+        </Section>
       )}
 
-      {query && !results.loading && !hasResults && (
-        <div className="fz-empty">
-          <SearchIcon />
-          <div className="fz-empty__title">No results</div>
-          <div>Nothing in your library matches “{query}”.</div>
-        </div>
-      )}
-
-      {results.data && (tab === 'all' || tab === 'artists') && results.data.artist.length > 0 && (
-        <section className="fz-section">
-          <div className="fz-section__head"><h2 className="fz-section__title">Artists</h2></div>
-          <div className="fz-grid fz-grid--tight fz-stagger">
-            {results.data.artist.slice(0, tab === 'all' ? 8 : undefined).map((artist) => (
+      {data && (tab === 'all' || tab === 'artists') && data.artist.length > 0 && (
+        <Section title="artists">
+          <Grid tight>
+            {data.artist.slice(0, tab === 'all' ? 8 : undefined).map((artist) => (
               <ArtistCard key={artist.id} artist={artist} />
             ))}
-          </div>
-        </section>
+          </Grid>
+        </Section>
       )}
 
-      {results.data && (tab === 'all' || tab === 'albums') && results.data.album.length > 0 && (
-        <section className="fz-section">
-          <div className="fz-section__head"><h2 className="fz-section__title">Albums</h2></div>
-          <div className="fz-grid fz-stagger">
-            {results.data.album.slice(0, tab === 'all' ? 10 : undefined).map((album) => (
+      {data && (tab === 'all' || tab === 'albums') && data.album.length > 0 && (
+        <Section title="albums">
+          <Grid>
+            {data.album.slice(0, tab === 'all' ? 12 : undefined).map((album) => (
               <AlbumCard key={album.id} album={album} />
             ))}
-          </div>
-        </section>
+          </Grid>
+        </Section>
       )}
 
-      {results.data && (tab === 'all' || tab === 'songs') && results.data.song.length > 0 && (
-        <section className="fz-section">
-          <div className="fz-section__head"><h2 className="fz-section__title">Songs</h2></div>
-          <TrackList
-            songs={tab === 'all' ? results.data.song.slice(0, 12) : results.data.song}
-            context={{ kind: 'Search', name: query }}
-          />
-        </section>
-      )}
     </Page>
   );
 }

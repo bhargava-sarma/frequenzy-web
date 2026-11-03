@@ -95,7 +95,10 @@ export async function probe(candidate: ServerCandidate, timeoutMs = 3500): Promi
   const started = performance.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const url = `${normalizeBase(candidate.url)}/rest/ping.view?c=frequenzy&v=1.16.1&f=json&u=probe&p=probe`;
+  // No credentials on purpose: an unauthenticated ping still comes back as a
+  // Subsonic envelope (carrying a "missing parameter" error), which is all the
+  // probe needs — and it keeps failed-login noise out of the server's logs.
+  const url = `${normalizeBase(candidate.url)}/rest/ping.view?c=frequenzy&v=1.16.1&f=json`;
   try {
     const res = await fetch(url, { method: 'GET', signal: controller.signal, cache: 'no-store', mode: 'cors' });
     clearTimeout(timer);
@@ -217,4 +220,44 @@ export function clearResolution(): void {
   } catch {
     /* ignore */
   }
+}
+
+/* ------------------------------------------------------------ network kind */
+
+function ipv4(host: string): number[] | null {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!m) return null;
+  const parts = m.slice(1).map(Number);
+  return parts.every((n) => n >= 0 && n <= 255) ? parts : null;
+}
+
+/**
+ * Whether an address is on the local network.
+ *
+ * Private IPv4 ranges, link-local, loopback and the usual home-network DNS
+ * suffixes count as home. Tailscale's 100.64.0.0/10 range and *.ts.net names do
+ * not: they are reachable from anywhere, so they are exactly the case where a
+ * lighter stream is worth offering.
+ */
+export function isHomeHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h || h === 'localhost') return true;
+  if (h.endsWith('.ts.net')) return false;
+  if (/\.(local|lan|home|home\.arpa|internal|localdomain)$/.test(h)) return true;
+  const v4 = ipv4(h);
+  if (v4) {
+    const [a, b] = v4;
+    if (a === 10 || a === 127) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true;
+    return false;
+  }
+  if (h === '::1' || h.startsWith('fe80:') || /^f[cd][0-9a-f]{2}:/.test(h)) return true;
+  // A bare single-label name (a NAS called "music") only resolves on a LAN.
+  return !h.includes('.') && !h.includes(':');
+}
+
+export function hostOfUrl(url: string): string {
+  return hostOf(url);
 }

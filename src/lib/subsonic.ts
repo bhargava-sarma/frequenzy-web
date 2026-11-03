@@ -2,8 +2,9 @@
  * Subsonic / OpenSubsonic API client for Navidrome.
  *
  * Two things matter here beyond the usual CRUD:
- *  1. Streams are always requested raw — `format=raw` tells Navidrome to hand back
- *     the original file bytes, so a 24/96 FLAC arrives as a 24/96 FLAC.
+ *  1. Streams are requested raw unless the listener asked otherwise — `format=raw`
+ *     tells Navidrome to hand back the original file bytes, so a 24/96 FLAC
+ *     arrives as a 24/96 FLAC.
  *  2. Every request goes through the connection manager, so a request issued the
  *     moment you walk out the front door fails over to Tailscale and retries once.
  */
@@ -12,12 +13,16 @@ import { connection } from './connection';
 import { md5, randomSalt } from './md5';
 import type {
   Album,
+  AlbumInfo,
   Artist,
   ArtistInfo,
   Genre,
+  InternetRadioStation,
   Playlist,
+  PlayQueue,
   ScanStatus,
   SearchResult,
+  ServerInfo,
   Song,
 } from './types';
 
@@ -128,20 +133,34 @@ interface SubsonicEnvelope<T> {
   };
 }
 
+/** Past this, a query string is sent as a form body instead — big playlist edits. */
+const MAX_QUERY = 6000;
+
 async function rawRequest<T>(
   base: string,
   endpoint: string,
   params: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<T> {
-  const url = `${base}/rest/${endpoint}?${buildQuery({ ...authParams(), ...params })}`;
-  const res = await fetch(url, { signal, cache: 'no-store', mode: 'cors' });
+  const query = buildQuery({ ...authParams(), ...params });
+  const url = `${base}/rest/${endpoint}`;
+  const res =
+    query.length > MAX_QUERY
+      ? await fetch(url, {
+          method: 'POST',
+          body: query,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          signal,
+          cache: 'no-store',
+          mode: 'cors',
+        })
+      : await fetch(`${url}?${query}`, { signal, cache: 'no-store', mode: 'cors' });
   if (!res.ok) throw new SubsonicApiError(0, `HTTP ${res.status} from ${endpoint}`);
   const json = (await res.json()) as SubsonicEnvelope<T>;
   const body = json['subsonic-response'];
   if (!body) throw new SubsonicApiError(0, `Malformed response from ${endpoint}`);
-  if (body.status === 'failed' && body.error) {
-    throw new SubsonicApiError(body.error.code, body.error.message);
+  if (body.status === 'failed') {
+    throw new SubsonicApiError(body.error?.code ?? 0, body.error?.message ?? `${endpoint} failed`);
   }
   return body as unknown as T;
 }
@@ -159,7 +178,7 @@ export async function request<T>(
     if (signal?.aborted) throw err;
     // Transport-level failure: the network probably moved. Re-race and try once more.
     const next = await connection.handleNetworkFailure();
-    if (!next) throw new NetworkUnreachableError();
+    if (next === null) throw new NetworkUnreachableError();
     return rawRequest<T>(next, endpoint, params, signal);
   }
 }
@@ -167,11 +186,9 @@ export async function request<T>(
 /* ------------------------------------------------------------------ media URLs */
 
 export interface StreamOptions {
-  /** Navidrome hands back the untouched source file when this is on. */
-  raw?: boolean;
-  /** Kept for completeness; ignored while `raw` is on. */
-  maxBitRate?: number;
-  format?: string;
+  /** 'original' streams the untouched file; a number is a transcode ceiling in kbps. */
+  quality?: 'original' | number;
+  format?: 'mp3' | 'opus' | 'aac';
 }
 
 /**
@@ -179,13 +196,13 @@ export interface StreamOptions {
  * "do not transcode" — the response is the original FLAC, bit for bit.
  */
 export function streamUrl(id: string, opts: StreamOptions = {}): string {
-  const { raw = true, maxBitRate, format } = opts;
-  return urlFor('stream.view', {
-    id,
-    format: raw ? 'raw' : format,
-    maxBitRate: raw ? 0 : maxBitRate,
-    estimateContentLength: false,
-  });
+  const { quality = 'original', format = 'mp3' } = opts;
+  if (quality === 'original') {
+    return urlFor('stream.view', { id, format: 'raw', maxBitRate: 0, estimateContentLength: false });
+  }
+  // A transcode has no Content-Length unless we ask Navidrome to estimate one,
+  // and without one the browser cannot show a duration or seek.
+  return urlFor('stream.view', { id, format, maxBitRate: quality, estimateContentLength: true });
 }
 
 /** Bypasses the transcoding pipeline entirely; used by the download action. */
@@ -200,8 +217,8 @@ export function coverArtUrl(coverArt: string | undefined, size?: number): string
 
 /* --------------------------------------------------------------------- system */
 
-export async function ping(): Promise<{ serverVersion?: string; type?: string; openSubsonic?: boolean }> {
-  return request('ping.view');
+export async function ping(): Promise<ServerInfo> {
+  return request<ServerInfo>('ping.view');
 }
 
 export async function verifyCredentials(creds: Credentials): Promise<boolean> {
@@ -249,7 +266,14 @@ export async function getAlbumList(
 ): Promise<Album[]> {
   const res = await request<{ albumList2?: { album?: Album[] } }>(
     'getAlbumList2.view',
-    { type, size: opts.size ?? 50, offset: opts.offset ?? 0, genre: opts.genre, fromYear: opts.fromYear, toYear: opts.toYear },
+    {
+      type,
+      size: Math.min(500, opts.size ?? 50),
+      offset: opts.offset ?? 0,
+      genre: opts.genre,
+      fromYear: opts.fromYear,
+      toYear: opts.toYear,
+    },
     signal,
   );
   return res.albumList2?.album ?? [];
@@ -258,6 +282,11 @@ export async function getAlbumList(
 export async function getAlbum(id: string, signal?: AbortSignal): Promise<Album> {
   const res = await request<{ album: Album }>('getAlbum.view', { id }, signal);
   return res.album;
+}
+
+export async function getAlbumInfo(id: string, signal?: AbortSignal): Promise<AlbumInfo> {
+  const res = await request<{ albumInfo?: AlbumInfo }>('getAlbumInfo2.view', { id }, signal);
+  return res.albumInfo ?? {};
 }
 
 export async function getArtists(signal?: AbortSignal): Promise<{ name: string; artist: Artist[] }[]> {
@@ -288,7 +317,14 @@ export async function getTopSongs(artist: string, count = 20, signal?: AbortSign
   return res.topSongs?.song ?? [];
 }
 
+/** Similar songs to a song, album or artist id — Navidrome accepts all three here. */
 export async function getSimilarSongs(id: string, count = 50, signal?: AbortSignal): Promise<Song[]> {
+  const res = await request<{ similarSongs?: { song?: Song[] } }>('getSimilarSongs.view', { id, count }, signal);
+  return res.similarSongs?.song ?? [];
+}
+
+/** Similar songs for an artist id, across that artist and their neighbours. */
+export async function getSimilarSongs2(id: string, count = 50, signal?: AbortSignal): Promise<Song[]> {
   const res = await request<{ similarSongs2?: { song?: Song[] } }>(
     'getSimilarSongs2.view',
     { id, count },
@@ -308,7 +344,7 @@ export async function getRandomSongs(
 ): Promise<Song[]> {
   const res = await request<{ randomSongs?: { song?: Song[] } }>(
     'getRandomSongs.view',
-    { size: opts.size ?? 100, genre: opts.genre, fromYear: opts.fromYear, toYear: opts.toYear },
+    { size: Math.min(500, opts.size ?? 100), genre: opts.genre, fromYear: opts.fromYear, toYear: opts.toYear },
     signal,
   );
   return res.randomSongs?.song ?? [];
@@ -317,7 +353,7 @@ export async function getRandomSongs(
 export async function getSongsByGenre(genre: string, count = 200, offset = 0, signal?: AbortSignal): Promise<Song[]> {
   const res = await request<{ songsByGenre?: { song?: Song[] } }>(
     'getSongsByGenre.view',
-    { genre, count, offset },
+    { genre, count: Math.min(500, count), offset },
     signal,
   );
   return res.songsByGenre?.song ?? [];
@@ -341,11 +377,16 @@ export async function getStarred(signal?: AbortSignal): Promise<SearchResult> {
   };
 }
 
-export async function search(
-  query: string,
-  opts: { artistCount?: number; albumCount?: number; songCount?: number; artistOffset?: number; albumOffset?: number; songOffset?: number } = {},
-  signal?: AbortSignal,
-): Promise<SearchResult> {
+export interface SearchOptions {
+  artistCount?: number;
+  albumCount?: number;
+  songCount?: number;
+  artistOffset?: number;
+  albumOffset?: number;
+  songOffset?: number;
+}
+
+export async function search(query: string, opts: SearchOptions = {}, signal?: AbortSignal): Promise<SearchResult> {
   const res = await request<{ searchResult3?: { artist?: Artist[]; album?: Album[]; song?: Song[] } }>(
     'search3.view',
     {
@@ -364,6 +405,16 @@ export async function search(
     album: res.searchResult3?.album ?? [],
     song: res.searchResult3?.song ?? [],
   };
+}
+
+/**
+ * Every song in the library, a page at a time. Navidrome treats an empty
+ * search as "match everything", which is the only way the Subsonic API offers
+ * to walk the whole song table.
+ */
+export async function getSongsPage(offset: number, count = 200, signal?: AbortSignal): Promise<Song[]> {
+  const result = await search('""', { artistCount: 0, albumCount: 0, songCount: count, songOffset: offset }, signal);
+  return result.song;
 }
 
 /* ------------------------------------------------------------------ playlists */
@@ -403,17 +454,29 @@ export async function updatePlaylist(
   });
 }
 
+/**
+ * Replace a playlist's tracks wholesale. Subsonic has no "move" call, so a
+ * reorder, a sort or a de-duplicate is a rewrite: remove every index, then add
+ * the new order back. One request each, sent as a form body when long.
+ */
+export async function replacePlaylistSongs(playlistId: string, currentCount: number, songIds: string[]): Promise<void> {
+  if (currentCount > 0) {
+    await updatePlaylist(playlistId, { songIndexToRemove: Array.from({ length: currentCount }, (_, i) => i) });
+  }
+  if (songIds.length > 0) await updatePlaylist(playlistId, { songIdToAdd: songIds });
+}
+
 export async function deletePlaylist(id: string): Promise<void> {
   await request('deletePlaylist.view', { id });
 }
 
 /* ------------------------------------------------------- ratings & scrobbling */
 
-export async function star(opts: { id?: string; albumId?: string; artistId?: string }): Promise<void> {
+export async function star(opts: { id?: string | string[]; albumId?: string | string[]; artistId?: string | string[] }): Promise<void> {
   await request('star.view', opts);
 }
 
-export async function unstar(opts: { id?: string; albumId?: string; artistId?: string }): Promise<void> {
+export async function unstar(opts: { id?: string | string[]; albumId?: string | string[]; artistId?: string | string[] }): Promise<void> {
   await request('unstar.view', opts);
 }
 
@@ -423,6 +486,26 @@ export async function setRating(id: string, rating: number): Promise<void> {
 
 export async function scrobble(id: string, submission: boolean, time?: number): Promise<void> {
   await request('scrobble.view', { id, submission, time: time ?? Date.now() });
+}
+
+/* --------------------------------------------------------------- radio & queue */
+
+export async function getInternetRadioStations(signal?: AbortSignal): Promise<InternetRadioStation[]> {
+  const res = await request<{ internetRadioStations?: { internetRadioStation?: InternetRadioStation[] } }>(
+    'getInternetRadioStations.view',
+    {},
+    signal,
+  );
+  return res.internetRadioStations?.internetRadioStation ?? [];
+}
+
+export async function getPlayQueue(signal?: AbortSignal): Promise<PlayQueue | null> {
+  const res = await request<{ playQueue?: PlayQueue }>('getPlayQueue.view', {}, signal);
+  return res.playQueue ?? null;
+}
+
+export async function savePlayQueue(ids: string[], current?: string, positionMs?: number): Promise<void> {
+  await request('savePlayQueue.view', { id: ids, current, position: positionMs !== undefined ? Math.round(positionMs) : undefined });
 }
 
 /* ---------------------------------------------------------------------- lyrics */

@@ -2,28 +2,30 @@
 
 import { useState } from 'react';
 
-import { AlbumCard, CardSkeleton, Shelf } from '../components/Cards';
-import { Page } from '../components/Page';
-import { getAlbumList, getGenres } from '../lib/subsonic';
-import { useAsync } from '../hooks/useAsync';
-import { useSmoothNavigate } from '../hooks/useSmoothNavigate';
+import { AlbumCard, Grid, Shelf, SkeletonCards, Tile } from '../components/Cards';
+import { Segmented } from '../components/controls';
+import { DiceIcon } from '../components/Icons';
+import { Page, Section } from '../components/Page';
+import { navigate } from '../lib/nav';
+import { useAlbumList, useGenres } from '../lib/queries';
+import * as act from '../state/actions';
+import { SeeAll } from './Home';
 
-const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960];
+const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950];
 
-export function Browse({ onMenuClick }: { onMenuClick?: () => void }) {
-  const navigate = useSmoothNavigate();
-  const [decade, setDecade] = useState<number | null>(null);
-
-  const newest = useAsync((signal) => getAlbumList('newest', { size: 24 }, signal), []);
-  const highest = useAsync((signal) => getAlbumList('highest', { size: 24 }, signal), []);
-  const genres = useAsync((signal) => getGenres(signal), []);
-  const byDecade = useAsync(
-    (signal) =>
-      decade === null
-        ? Promise.resolve([])
-        : getAlbumList('byYear', { size: 40, fromYear: decade, toYear: decade + 9 }, signal),
-    [decade],
-  );
+export function Browse() {
+  const newest = useAlbumList('newest', { size: 20 });
+  const highest = useAlbumList('highest', { size: 20 });
+  const random = useAlbumList('random', { size: 12 }, 30 * 60_000);
+  const genres = useGenres();
+  const [decade, setDecade] = useState<number>(() => {
+    try {
+      return Number(sessionStorage.getItem('frequenzy.decade')) || 2010;
+    } catch {
+      return 2010;
+    }
+  });
+  const byDecade = useAlbumList('byYear', { size: 40, fromYear: decade, toYear: decade + 9 });
 
   const topGenres = (genres.data ?? [])
     .filter((g) => (g.albumCount ?? 0) > 0)
@@ -31,67 +33,86 @@ export function Browse({ onMenuClick }: { onMenuClick?: () => void }) {
     .slice(0, 24);
 
   return (
-    <Page title="Browse" subtitle="Everything on the server, sorted every which way." onMenuClick={onMenuClick}>
-      <Shelf title="New Releases" link="See All" onLink={() => navigate('/library/recent')}>
-        {newest.loading
-          ? Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)
-          : (newest.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
-      </Shelf>
+    <Page
+      root
+      title="browse"
+      eyebrow="the whole library"
+      onRefresh={() => Promise.all([newest.reload(), highest.reload(), random.reload(), genres.reload(), byDecade.reload()])}
+    >
+      <Section index={1} title="new releases" action={<SeeAll to="/library/recent" />}>
+        <Shelf>{newest.loading ? <SkeletonCards /> : (newest.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}</Shelf>
+      </Section>
 
-      <Shelf title="Top Rated" link="See All" onLink={() => navigate('/library/albums')}>
-        {highest.loading
-          ? Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)
-          : (highest.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
-      </Shelf>
+      {(highest.loading || (highest.data?.length ?? 0) > 0) && (
+        <Section index={2} title="top rated" action={<SeeAll to="/library/albums?sort=highest" />}>
+          <Shelf>{highest.loading ? <SkeletonCards /> : (highest.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}</Shelf>
+        </Section>
+      )}
 
-      <section className="fz-section">
-        <div className="fz-section__head">
-          <h2 className="fz-section__title">By Decade</h2>
+      <Section index={3} title="by decade">
+        <div className="scroll-x">
+          <Segmented
+            label="Decade"
+            mono
+            value={String(decade)}
+            onChange={(value) => {
+              setDecade(Number(value));
+              try {
+                sessionStorage.setItem('frequenzy.decade', value);
+              } catch {
+                /* ignore */
+              }
+            }}
+            options={DECADES.map((year) => ({ value: String(year), label: `${year}s` }))}
+          />
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {DECADES.map((year) => (
-            <button
-              key={year}
-              type="button"
-              className={`fz-btn ${decade === year ? 'fz-btn--solid' : ''}`}
-              onClick={() => setDecade(decade === year ? null : year)}
-            >
-              {year}s
-            </button>
-          ))}
-        </div>
-        {decade !== null && (
-          <div className="fz-grid fz-stagger" style={{ marginTop: 18 }}>
-            {byDecade.loading
-              ? Array.from({ length: 10 }, (_, i) => <CardSkeleton key={i} />)
-              : (byDecade.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
-            {!byDecade.loading && (byDecade.data?.length ?? 0) === 0 && (
-              <div style={{ gridColumn: '1 / -1', color: 'var(--text-secondary)', fontSize: 13 }}>
-                Nothing from the {decade}s in your library.
-              </div>
-            )}
-          </div>
+        {byDecade.loading ? (
+          <Grid>
+            <SkeletonCards count={6} />
+          </Grid>
+        ) : (byDecade.data?.length ?? 0) === 0 ? (
+          <div className="tracks-empty">nothing from the {decade}s in your library</div>
+        ) : (
+          <Shelf>
+            {(byDecade.data ?? []).map((album) => (
+              <AlbumCard key={album.id} album={album} subtitle={album.year ? `${album.artist ?? ''} · ${album.year}` : undefined} />
+            ))}
+          </Shelf>
         )}
-      </section>
+      </Section>
 
-      <section className="fz-section">
-        <div className="fz-section__head">
-          <h2 className="fz-section__title">Genres</h2>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {topGenres.map((genre) => (
-            <button
+      <Section index={4} title="genres" action={<SeeAll to="/library/genres" />}>
+        <div className="tiles">
+          {topGenres.map((genre, i) => (
+            <Tile
               key={genre.value}
-              type="button"
-              className="fz-btn"
+              index={i + 1}
+              title={genre.value}
+              subtitle={`${genre.albumCount ?? 0} albums · ${genre.songCount ?? 0} songs`}
               onClick={() => navigate(`/genre/${encodeURIComponent(genre.value)}`)}
-            >
-              {genre.value}
-              <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>{genre.albumCount}</span>
-            </button>
+            />
           ))}
         </div>
-      </section>
+      </Section>
+
+      <Section
+        index={5}
+        title="something random"
+        action={
+          <button type="button" className="section__link" onClick={() => void random.reload()}>
+            <DiceIcon /> reshuffle
+          </button>
+        }
+      >
+        <Grid>
+          {random.loading ? <SkeletonCards count={6} /> : (random.data ?? []).map((album) => <AlbumCard key={album.id} album={album} />)}
+        </Grid>
+        <div className="section__foot">
+          <button type="button" className="key" onClick={() => void act.openRandomAlbum()}>
+            <DiceIcon /> open a random album
+          </button>
+        </div>
+      </Section>
     </Page>
   );
 }

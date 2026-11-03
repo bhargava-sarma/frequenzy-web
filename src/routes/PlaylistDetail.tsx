@@ -1,190 +1,247 @@
-/** One playlist, with drag-free removal handled through the row menu. */
+/**
+ * One playlist: reorder by dragging, remove by swiping or selecting, filter,
+ * and everything else from the menu.
+ *
+ * Edits are optimistic — the list changes the moment you let go — and they
+ * reach the server strictly one after another. Subsonic edits playlists by
+ * index, so two edits racing each other would each be computed against an
+ * order the other had already changed.
+ */
 
-import { useCallback, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Artwork } from '../components/Artwork';
-import { DownloadButton } from '../components/DownloadButton';
-import { Page } from '../components/Page';
+import { DownloadIcon, EllipsisIcon, FilterIcon, PencilIcon, PlayIcon, ShuffleIcon, CheckIcon, CloseIcon } from '../components/Icons';
+import { Empty, ErrorState, Page } from '../components/Page';
 import { TrackList } from '../components/TrackList';
-import { useContextMenu } from '../components/ContextMenu';
-import { EllipsisIcon, PlayIcon, ShuffleIcon } from '../components/Icons';
+import { isDownloaded } from '../lib/downloads';
 import { formatCount, formatDurationLong } from '../lib/format';
-import { getPlaylist, updatePlaylist } from '../lib/subsonic';
-import { useAsync } from '../hooks/useAsync';
-import { usePalette } from '../hooks/usePalette';
-import { MORPH_NAME } from '../hooks/useSmoothNavigate';
-import { useDialogs } from '../state/dialogs';
-import { useLibrary } from '../state/library';
+import { invalidateQueries } from '../lib/query';
+import { usePlaylistData } from '../lib/queries';
+import { totalDuration } from '../lib/song';
+import { replacePlaylistSongs, updatePlaylist } from '../lib/subsonic';
 import type { Song } from '../lib/types';
-import { usePlayer } from '../state/player';
-import { useMediaMenu } from '../hooks/useMediaMenu';
+import { useDownloadsVersion } from '../hooks/useData';
+import * as act from '../state/actions';
+import { library } from '../state/library';
+import { playlistHeader, playlistMenu } from '../state/menus';
+import { ui } from '../state/ui';
+import { DetailSkeleton } from './AlbumDetail';
+import { ListSkeleton } from './Library';
 
-export function PlaylistDetail() {
-  const { id = '' } = useParams();
-  const playlistId = decodeURIComponent(id);
-  const { actions } = usePlayer();
-  const { renamePlaylist, deletePlaylist, removeFromPlaylist, reloadPlaylists, playlists } = useLibrary();
-  const { prompt } = useDialogs();
-  const { playlistMenu } = useMediaMenu();
-  const { openAt, menu } = useContextMenu();
+export function PlaylistDetail({ id }: { id: string }) {
+  const playlist = usePlaylistData(id);
+  const [local, setLocal] = useState<Song[] | null>(null);
+  const [filter, setFilter] = useState('');
+  const [filtering, setFiltering] = useState(false);
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const pending = useRef(0);
+  useDownloadsVersion();
 
-  // Re-fetch when the playlist list changes, so edits show up straight away.
-  const version = playlists.find((p) => p.id === playlistId)?.changed ?? '';
-  const playlist = useAsync((signal) => getPlaylist(playlistId, signal), [playlistId, version]);
-  const { palette } = usePalette(playlist.data?.coverArt, true);
+  const server = playlist.data?.entry;
+  // Once the server has caught up and nothing is in flight, its order wins.
+  useEffect(() => {
+    if (pending.current === 0) setLocal(null);
+  }, [server]);
 
-  // Reordering is optimistic: the server call replaces the whole track list, so
-  // the UI must not wait for a round trip to look right.
-  const [localOrder, setLocalOrder] = useState<Song[] | undefined>(undefined);
-  const songs = localOrder ?? playlist.data?.entry ?? [];
-  const context = { kind: 'Playlist', name: playlist.data?.name ?? '', id: playlistId };
+  const songs = useMemo(() => local ?? server ?? [], [local, server]);
+  const data = playlist.data;
+  const context = useMemo(() => act.playlistContext({ id, name: data?.name ?? 'playlist' }), [data?.name, id]);
 
-  /**
-   * Subsonic has no "move track" call, so a reorder is a rewrite: clear the
-   * playlist and add the songs back in their new order.
-   */
-  const handleReorder = useCallback(
-    async (from: number, to: number) => {
-      const next = [...songs];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      setLocalOrder(next);
-      try {
-        await updatePlaylist(playlistId, {
-          songIndexToRemove: songs.map((_, i) => i),
-        });
-        await updatePlaylist(playlistId, { songIdToAdd: next.map((song) => song.id) });
-        reloadPlaylists();
-      } catch {
-        setLocalOrder(undefined); // put the server's order back
-      }
-    },
-    [playlistId, reloadPlaylists, songs],
+  const term = filter.trim().toLowerCase();
+  const filtered = useMemo(
+    () =>
+      term
+        ? songs.filter(
+            (s) =>
+              s.title.toLowerCase().includes(term) ||
+              (s.artist ?? '').toLowerCase().includes(term) ||
+              (s.album ?? '').toLowerCase().includes(term),
+          )
+        : songs,
+    [songs, term],
   );
 
-  const handleRemove = useCallback(
-    async (removeIndex: number) => {
-      setLocalOrder(songs.filter((_, i) => i !== removeIndex));
-      await removeFromPlaylist(playlistId, [removeIndex]).catch(() => setLocalOrder(undefined));
-    },
-    [playlistId, removeFromPlaylist, songs],
-  );
+  /** Run edits strictly in order; on failure, fall back to the server's copy. */
+  const enqueue = (work: () => Promise<unknown>, failure: string) => {
+    pending.current += 1;
+    chain.current = chain.current
+      .then(work)
+      .catch(() => {
+        ui.error(failure);
+        setLocal(null);
+      })
+      .finally(() => {
+        pending.current -= 1;
+        if (pending.current === 0) {
+          invalidateQueries(`playlist:${id}`);
+          void library.loadPlaylists();
+        }
+      });
+  };
 
-  if (!playlist.loading && !playlist.data) {
+  const reorder = (from: number, to: number) => {
+    const before = [...songs];
+    const next = [...songs];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setLocal(next);
+    enqueue(() => replacePlaylistSongs(id, before.length, next.map((s) => s.id)), "couldn't save the new order");
+  };
+
+  /** `indices` are positions in the (unfiltered) list, highest first. */
+  const remove = (indices: number[]) => {
+    if (indices.length === 0) return;
+    const drop = new Set(indices);
+    const removed = songs.filter((_, i) => drop.has(i));
+    const next = songs.filter((_, i) => !drop.has(i));
+    setLocal(next);
+    enqueue(() => updatePlaylist(id, { songIndexToRemove: [...indices].sort((a, b) => b - a) }), "couldn't remove from the playlist");
+    ui.toast(removed.length === 1 ? `removed “${removed[0].title}”` : `removed ${removed.length} songs`, {
+      action: {
+        label: 'undo',
+        run: () => {
+          // Put them back where they were, then rewrite the playlist in that order.
+          const restored = [...next];
+          const sorted = [...indices].sort((a, b) => a - b);
+          for (const index of sorted) restored.splice(index, 0, songs[index]);
+          const count = next.length;
+          setLocal(restored);
+          enqueue(() => replacePlaylistSongs(id, count, restored.map((s) => s.id)), "couldn't undo");
+        },
+      },
+    });
+  };
+
+  // Filtering shows a subset; removing from it maps back to real positions.
+  const removeFiltered = (indices: number[]) => {
+    if (!term) {
+      remove(indices);
+      return;
+    }
+    const positions = new Map<Song, number>();
+    songs.forEach((song, i) => positions.set(song, i));
+    remove(indices.map((i) => positions.get(filtered[i])!).filter((n) => n !== undefined));
+  };
+
+  if (playlist.loading && !local) {
     return (
-      <Page title="Playlist">
-        <div className="fz-empty"><div className="fz-empty__title">Playlist not found</div></div>
+      <Page title="playlist" head={<DetailSkeleton />}>
+        <ListSkeleton />
+      </Page>
+    );
+  }
+  if (!data) {
+    return (
+      <Page title="playlist">
+        {playlist.error ? <ErrorState error={playlist.error} onRetry={() => void playlist.reload()} /> : <Empty title="playlist not found" />}
       </Page>
     );
   }
 
-  const name = playlist.data?.name ?? 'Playlist';
+  const duration = totalDuration(songs);
+  const offline = songs.length > 0 && songs.every((s) => isDownloaded(s.id));
 
   return (
-    <Page title={name} showTitle={false}>
-      <div
-        className="fz-detail-wash"
-        aria-hidden="true"
-        style={{
-          ['--card-glow' as string]: palette.vibrant,
-          ['--card-deep' as string]: palette.darkVibrant,
-        }}
-      />
-      {/* The header borrows this record's accent rather than the app's, so the
-          artist link stays legible against the wash above — and stays this
-          album's colour even while something else is playing. */}
-      <div className="fz-detail-head" style={{ ['--art-accent' as string]: palette.accent }}>
-        <Artwork
-          coverArt={playlist.data?.coverArt}
-          name={name}
-          size={600}
-          className="fz-detail-head__art"
-          morphName={MORPH_NAME}
-        />
-        <div className="fz-detail-head__info">
-          <h1 className="fz-detail-head__title">{name}</h1>
-          <button
-            type="button"
-            style={{
-              fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, maxWidth: 520,
-              textAlign: 'inherit',
-            }}
-            onClick={() =>
-              prompt({
-                title: 'Playlist Description',
-                label: 'Description',
-                initialValue: playlist.data?.comment ?? '',
-                confirmLabel: 'Save',
-                onConfirm: (value) =>
-                  void updatePlaylist(playlistId, { comment: value }).then(() => {
-                    reloadPlaylists();
-                    playlist.reload();
-                  }),
-              })
-            }
-          >
-            {playlist.data?.comment || 'Add a description…'}
-          </button>
-          <div className="fz-detail-head__meta">
-            {[formatCount(playlist.data?.songCount ?? songs.length, 'song'), formatDurationLong(playlist.data?.duration)]
-              .filter(Boolean)
-              .join(' · ')}
-          </div>
-          <div className="fz-detail-head__actions">
-            <button
-              type="button"
-              className="fz-btn fz-btn--solid"
-              disabled={songs.length === 0}
-              onClick={() => actions.playQueue(songs, 0, context)}
-            >
-              <PlayIcon /> Play
+    <Page
+      title={data.name}
+      onRefresh={() => playlist.reload()}
+      head={
+        <div className="detail">
+          <Artwork coverArt={data.coverArt} name={data.name} size={300} className="detail__art" eager />
+          <div className="detail__info">
+            <div className="label">
+              playlist · {data.public ? 'public' : 'private'}
+              {data.owner ? ` · ${data.owner}` : ''}
+            </div>
+            <h1 className="detail__title">{data.name}</h1>
+            <button type="button" className="detail__desc" onClick={() => act.editPlaylistDescription(data)}>
+              {data.comment ? data.comment : <span className="detail__desc-empty"><PencilIcon /> add a description</span>}
             </button>
-            <button
-              type="button"
-              className="fz-btn"
-              disabled={songs.length === 0}
-              onClick={() => actions.playQueue([...songs].sort(() => Math.random() - 0.5), 0, context)}
-            >
-              <ShuffleIcon /> Shuffle
-            </button>
-            <DownloadButton songs={songs} />
-            <button
-              type="button"
-              className="fz-icon-btn"
-              aria-label="More options"
-              onClick={(event) =>
-                openAt(
-                  event.currentTarget,
-                  playlistMenu({ id: playlistId, name }, songs, {
-                    onRename: () =>
-                      prompt({
-                        title: 'Rename Playlist',
-                        label: 'Name',
-                        initialValue: name,
-                        confirmLabel: 'Rename',
-                        onConfirm: (value) => void renamePlaylist(playlistId, value).then(playlist.reload),
-                      }),
-                    onDelete: () => void deletePlaylist(playlistId),
-                  }),
-                )
-              }
-            >
-              <EllipsisIcon />
-            </button>
+            <div className="detail__meta meta">
+              <span>{formatCount(songs.length, 'song')}</span>
+              {duration > 0 && <span>{formatDurationLong(duration)}</span>}
+              {offline && <span className="tag">offline</span>}
+            </div>
+            <div className="detail__keys">
+              <div className="detail__primary">
+                <button type="button" className="key key--primary key--lg" disabled={!songs.length} onClick={() => act.playSongs(songs, 0, context, { shuffle: false })}>
+                  <PlayIcon /> play
+                </button>
+                <button type="button" className="key key--lg" disabled={!songs.length} onClick={() => act.playSongs(songs, 0, context, { shuffle: true })}>
+                  <ShuffleIcon /> shuffle
+                </button>
+              </div>
+              <div className="detail__secondary">
+                <button
+                  type="button"
+                  className="key key--lg key--icon"
+                  aria-label={offline ? 'Remove download' : 'Download'}
+                  disabled={!songs.length}
+                  onClick={() => (offline ? void act.removeDownloadsFor(songs) : act.download(songs))}
+                >
+                  {offline ? <CheckIcon /> : <DownloadIcon />}
+                </button>
+                {songs.length > 12 && (
+                  <button
+                    type="button"
+                    className={`key key--lg key--icon ${filtering ? 'is-on' : ''}`}
+                    aria-label="Filter this playlist"
+                    aria-pressed={filtering}
+                    onClick={() => {
+                      setFiltering((v) => !v);
+                      setFilter('');
+                    }}
+                  >
+                    <FilterIcon />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="key key--lg key--icon"
+                  aria-label="More"
+                  onClick={(event) => ui.openMenu(playlistMenu(data), event.currentTarget, playlistHeader(data))}
+                >
+                  <EllipsisIcon />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-
+      }
+      toolbar={
+        filtering ? (
+          <div className="toolbar">
+            <div className="input toolbar__filter">
+              <FilterIcon />
+              <input
+                autoFocus
+                value={filter}
+                placeholder="filter this playlist"
+                aria-label="Filter this playlist"
+                onChange={(event) => setFilter(event.target.value)}
+              />
+              {filter && (
+                <button type="button" className="ibtn ibtn--sm" aria-label="Clear" onClick={() => setFilter('')}>
+                  <CloseIcon />
+                </button>
+              )}
+            </div>
+            {term && <span className="meta">{filtered.length} of {songs.length}</span>}
+          </div>
+        ) : undefined
+      }
+    >
       <TrackList
-        songs={songs}
+        songs={filtered}
         context={context}
-        playlist={{ id: playlistId }}
-        onReorder={(from, to) => void handleReorder(from, to)}
-        onRemove={(removeIndex) => void handleRemove(removeIndex)}
-        emptyMessage="This playlist is empty — add songs from anywhere with the ⋯ menu."
+        playlistId={id}
+        sortable
+        onRemove={removeFiltered}
+        removeLabel="remove"
+        onReorder={term ? undefined : reorder}
+        emptyText={term ? `nothing in this playlist matches “${filter}”` : 'this playlist is empty — add songs from any ⋯ menu, or drag them onto it in the sidebar.'}
       />
-      {menu}
     </Page>
   );
 }

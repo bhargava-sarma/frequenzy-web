@@ -1,51 +1,60 @@
 /**
- * Album artwork with a graceful placeholder.
+ * Album artwork.
  *
- * Real covers fade in once decoded; until then (or if the track has none) a
- * monogram tile stands in, tinted from a hash of the title so the same album
- * always gets the same colour.
- *
- * The element forwards a ref because it is one half of the shared-element morph
- * between a shelf and a detail page: the cover you clicked has to be findable
- * so it can be tagged as the thing that flies.
+ * Requests are snapped to a handful of sizes so the same cover shown at 48px
+ * in a row and 56px in the deck is one download, not two. Until a cover has
+ * decoded — or when there is none — a placeholder stands in: a dotted panel
+ * with the first letter in the display face. When the server is out of reach
+ * the copy stored with a download is used instead.
  */
 
-import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { coverArtUrl } from '../lib/subsonic';
 import { localArtUrl } from '../lib/downloads';
-import { hashHue, initials } from '../lib/format';
+import { coverArtUrl } from '../lib/subsonic';
+
+const SIZES = [64, 128, 256, 384, 512, 768, 1024];
+
+function requestSize(display: number): number {
+  const dpr = typeof window !== 'undefined' ? Math.min(2.5, window.devicePixelRatio || 1) : 1;
+  const want = display * dpr;
+  return SIZES.find((size) => size >= want) ?? SIZES[SIZES.length - 1];
+}
+
+function monogram(name: string): string {
+  const trimmed = name.replace(/^(the|a|an)\s+/i, '').trim();
+  const first = [...trimmed][0] ?? '·';
+  return first.toUpperCase();
+}
 
 interface ArtworkProps {
   coverArt?: string;
   name: string;
-  size?: number;
+  /** Rendered size in CSS pixels; picks the request size. */
+  size: number;
   className?: string;
-  rounded?: boolean;
+  round?: boolean;
   children?: ReactNode;
-  /**
-   * Names this cover as a shared-element transition target. A named element is
-   * also marked `data-morph`, which is how the navigation helper tells a
-   * permanent destination from a card that borrowed the name for one flight.
-   */
-  morphName?: string;
+  style?: CSSProperties;
+  /** Load straight away rather than when scrolled near. */
+  eager?: boolean;
 }
 
-export const Artwork = forwardRef<HTMLDivElement, ArtworkProps>(function Artwork(
-  { coverArt, name, size = 300, className = '', rounded, children, morphName },
-  ref,
-) {
-  const remote = coverArtUrl(coverArt, size);
-  const [loaded, setLoaded] = useState(false);
+export const Artwork = memo(function Artwork({
+  coverArt, name, size, className = '', round, children, style, eager,
+}: ArtworkProps) {
+  const remote = coverArt ? coverArtUrl(coverArt, requestSize(size)) : '';
   const [src, setSrc] = useState(remote);
+  const [loaded, setLoaded] = useState(false);
   const objectUrl = useRef<string | null>(null);
+  const triedLocal = useRef(false);
 
   useEffect(() => {
-    setLoaded(false);
     setSrc(remote);
+    setLoaded(false);
+    triedLocal.current = false;
   }, [remote]);
 
-  // Blob URLs created for the offline fallback are ours to release.
   useEffect(
     () => () => {
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
@@ -53,42 +62,40 @@ export const Artwork = forwardRef<HTMLDivElement, ArtworkProps>(function Artwork
     [],
   );
 
-  /** The server is unreachable — try the copy stored with a download. */
-  const onError = async () => {
+  const onError = () => {
     setLoaded(false);
-    if (!coverArt || objectUrl.current) return;
-    const local = await localArtUrl(coverArt);
-    if (local) {
+    if (!coverArt || triedLocal.current) {
+      setSrc('');
+      return;
+    }
+    triedLocal.current = true;
+    void localArtUrl(coverArt).then((local) => {
+      if (!local) {
+        setSrc('');
+        return;
+      }
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
       objectUrl.current = local;
       setSrc(local);
-    }
+    });
   };
 
   return (
-    <div
-      ref={ref}
-      className={`fz-art ${rounded ? 'fz-art--rounded' : ''} ${className}`}
-      style={{
-        ['--ph-hue' as string]: hashHue(name),
-        ...(morphName ? { viewTransitionName: morphName } : null),
-      }}
-      {...(morphName ? { 'data-morph': '' } : null)}
-    >
+    <div className={`art ${round ? 'art--round' : ''} ${loaded ? 'is-loaded' : ''} ${className}`} style={style}>
       {!loaded && (
-        <div className="fz-art__placeholder" style={{ fontSize: Math.max(11, size / 6) }}>
-          {initials(name)}
+        <div className="art__ph" aria-hidden="true">
+          <span style={{ fontSize: Math.max(12, Math.round(size * 0.38)) }}>{monogram(name)}</span>
         </div>
       )}
       {src && (
         <img
           src={src}
           alt=""
-          loading="lazy"
+          loading={eager ? 'eager' : 'lazy'}
           decoding="async"
           draggable={false}
-          className={loaded ? 'is-loaded' : ''}
           onLoad={() => setLoaded(true)}
-          onError={() => void onError()}
+          onError={onError}
         />
       )}
       {children}

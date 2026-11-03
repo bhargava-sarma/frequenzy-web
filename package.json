@@ -2,7 +2,7 @@
   "name": "frequenzy",
   "private": true,
   "version": "1.0.0",
-  "description": "Frequenzy \u2014 a bit-perfect Apple Music-style web client for Navidrome",
+  "description": "Frequenzy — a hardware-style, bit-perfect network music player for Navidrome",
   "type": "module",
   "scripts": {
     "dev": "node scripts/sync-dict.mjs && vite",
@@ -13,6 +13,9 @@
     "postinstall": "node scripts/sync-dict.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/doto": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
     "@sglkc/kuroshiro": "^1.0.1",
     "@sglkc/kuroshiro-analyzer-kuromoji": "^1.0.1",
     "pinyin-pro": "^3.29.3",

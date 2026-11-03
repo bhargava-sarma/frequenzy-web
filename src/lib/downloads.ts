@@ -9,11 +9,13 @@
  * plain-HTTP Navidrome. IndexedDB has no such restriction and stores Blobs
  * natively, so downloads work on a LAN address exactly as they do on localhost.
  *
- * Playback reads a track back as a blob URL — an <audio> element cannot read
- * storage directly, and a blob hands back the bytes exactly as they were
- * stored, which is the whole point here.
+ * Downloads run one at a time from a queue — a dozen parallel FLAC downloads
+ * saturate the link and make every progress bar meaningless — and any of them
+ * can be cancelled.
  */
 
+import { connection } from './connection';
+import { compactSong } from './song';
 import { coverArtUrl, streamUrl } from './subsonic';
 import type { Song } from './types';
 
@@ -35,6 +37,10 @@ function openDb(): Promise<IDBDatabase> {
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error ?? new Error('IndexedDB unavailable'));
+    });
+    // A failed open should not be cached forever.
+    dbPromise.catch(() => {
+      dbPromise = null;
     });
   }
   return dbPromise;
@@ -61,6 +67,18 @@ function idbGet(key: string): Promise<Blob | undefined> {
         const request = tx.objectStore(STORE).get(key);
         request.onsuccess = () => resolve(request.result as Blob | undefined);
         request.onerror = () => reject(request.error);
+      }),
+  );
+}
+
+function idbHas(key: string): Promise<boolean> {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const request = tx.objectStore(STORE).count(key);
+        request.onsuccess = () => resolve(request.result > 0);
+        request.onerror = () => resolve(false);
       }),
   );
 }
@@ -97,7 +115,8 @@ export interface DownloadRecord {
 
 export type DownloadState =
   | { status: 'idle' }
-  | { status: 'downloading'; progress: number }
+  | { status: 'queued' }
+  | { status: 'downloading'; progress: number; received: number; total: number }
   | { status: 'done'; bytes: number }
   | { status: 'error'; message: string };
 
@@ -105,12 +124,16 @@ type Listener = () => void;
 
 let index: Record<string, DownloadRecord> = load();
 const active = new Map<string, DownloadState>();
+const pending: Song[] = [];
 const listeners = new Set<Listener>();
+let current: { id: string; controller: AbortController } | null = null;
+let version = 0;
 
 function load(): Record<string, DownloadRecord> {
   try {
     const raw = localStorage.getItem(INDEX_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, DownloadRecord>) : {};
+    const parsed = raw ? (JSON.parse(raw) as Record<string, DownloadRecord>) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
@@ -125,12 +148,20 @@ function persist() {
 }
 
 function emit() {
-  for (const fn of listeners) fn();
+  version += 1;
+  for (const fn of [...listeners]) fn();
 }
 
 export function subscribeDownloads(fn: Listener): () => void {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** Changes whenever anything about downloads changes; for useSyncExternalStore. */
+export function downloadsVersion(): number {
+  return version;
 }
 
 export function isSupported(): boolean {
@@ -142,13 +173,29 @@ export function isDownloaded(songId: string): boolean {
 }
 
 export function downloadState(songId: string): DownloadState {
-  if (active.has(songId)) return active.get(songId)!;
+  const state = active.get(songId);
+  if (state) return state;
   const record = index[songId];
   return record ? { status: 'done', bytes: record.bytes } : { status: 'idle' };
 }
 
 export function getDownloads(): DownloadRecord[] {
   return Object.values(index).sort((a, b) => b.downloadedAt - a.downloadedAt);
+}
+
+export function downloadCount(): number {
+  return Object.keys(index).length;
+}
+
+/** Songs waiting or in flight, in the order they will run. */
+export function activeDownloads(): { song: Song; state: DownloadState }[] {
+  const list: { song: Song; state: DownloadState }[] = [];
+  if (current) {
+    const song = runningSong;
+    if (song) list.push({ song, state: downloadState(song.id) });
+  }
+  for (const song of pending) list.push({ song, state: downloadState(song.id) });
+  return list;
 }
 
 export function totalBytes(): number {
@@ -165,34 +212,68 @@ function artKeyFor(coverArt: string): string {
   return `art:${coverArt}`;
 }
 
+let runningSong: Song | null = null;
+let pumping = false;
+
+async function pump(): Promise<void> {
+  if (pumping) return;
+  pumping = true;
+  try {
+    while (pending.length > 0) {
+      const song = pending.shift()!;
+      if (index[song.id]) {
+        active.delete(song.id);
+        continue;
+      }
+      await fetchOne(song);
+    }
+  } finally {
+    pumping = false;
+    runningSong = null;
+    current = null;
+    emit();
+  }
+}
+
 /**
- * Fetch a track and its artwork into the cache.
+ * Fetch a track and its artwork into storage.
  *
  * The stream is read in chunks so the UI can show real progress; Navidrome
  * sends a Content-Length for raw files, so the percentage is honest.
  */
-export async function downloadSong(song: Song): Promise<void> {
-  if (!isSupported() || index[song.id]) return;
-
-  active.set(song.id, { status: 'downloading', progress: 0 });
+async function fetchOne(song: Song): Promise<void> {
+  const controller = new AbortController();
+  current = { id: song.id, controller };
+  runningSong = song;
+  active.set(song.id, { status: 'downloading', progress: 0, received: 0, total: song.size ?? 0 });
   emit();
 
   try {
-    const response = await fetch(streamUrl(song.id, { raw: true }));
+    await connection.ensure().catch(() => {});
+    const response = await fetch(streamUrl(song.id, { quality: 'original' }), { signal: controller.signal });
     if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
 
     const total = Number(response.headers.get('Content-Length') ?? 0) || song.size || 0;
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let received = 0;
+    let lastEmit = 0;
 
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
       received += value.length;
-      if (total > 0) {
-        active.set(song.id, { status: 'downloading', progress: Math.min(1, received / total) });
+      const now = performance.now();
+      // Progress at a sensible rate; a fast LAN delivers thousands of chunks.
+      if (now - lastEmit > 120) {
+        lastEmit = now;
+        active.set(song.id, {
+          status: 'downloading',
+          progress: total > 0 ? Math.min(1, received / total) : 0,
+          received,
+          total,
+        });
         emit();
       }
     }
@@ -205,44 +286,85 @@ export async function downloadSong(song: Song): Promise<void> {
     // Artwork too, so downloaded music still looks like itself offline.
     if (song.coverArt) {
       try {
-        const art = await fetch(coverArtUrl(song.coverArt, 600));
-        if (art.ok) await idbPut(artKeyFor(song.coverArt), await art.blob());
+        if (!(await idbHas(artKeyFor(song.coverArt)))) {
+          const art = await fetch(coverArtUrl(song.coverArt, 600), { signal: controller.signal });
+          if (art.ok) await idbPut(artKeyFor(song.coverArt), await art.blob());
+        }
       } catch {
         /* artwork is optional */
       }
     }
 
-    index[song.id] = { song, bytes: blob.size, downloadedAt: Date.now() };
+    index[song.id] = { song: compactSong(song), bytes: blob.size, downloadedAt: Date.now() };
     persist();
     active.delete(song.id);
     emit();
   } catch (error) {
+    if (controller.signal.aborted) {
+      active.delete(song.id);
+      emit();
+      return;
+    }
     active.set(song.id, {
       status: 'error',
       message: error instanceof Error ? error.message : 'Download failed',
     });
     emit();
     setTimeout(() => {
-      active.delete(song.id);
-      emit();
-    }, 4000);
+      if (active.get(song.id)?.status === 'error') {
+        active.delete(song.id);
+        emit();
+      }
+    }, 6000);
   }
 }
 
-export async function downloadSongs(songs: Song[]): Promise<void> {
-  // Sequential on purpose: a dozen parallel FLAC downloads saturate the link
-  // and make the progress bars meaningless.
+/** Queue songs for offline storage. Returns how many were actually queued. */
+export function downloadSongs(songs: Song[]): number {
+  if (!isSupported()) return 0;
+  let queued = 0;
   for (const song of songs) {
-    await downloadSong(song);
+    if (song.isRadio || index[song.id]) continue;
+    const state = active.get(song.id)?.status;
+    if (state === 'queued' || state === 'downloading') continue;
+    pending.push(song);
+    active.set(song.id, { status: 'queued' });
+    queued += 1;
   }
+  if (queued) {
+    emit();
+    void pump();
+  }
+  return queued;
+}
+
+export function downloadSong(song: Song): number {
+  return downloadSongs([song]);
+}
+
+export function cancelDownload(songId: string): void {
+  const position = pending.findIndex((song) => song.id === songId);
+  if (position >= 0) pending.splice(position, 1);
+  if (current?.id === songId) current.controller.abort();
+  if (active.get(songId)?.status !== 'downloading') active.delete(songId);
+  emit();
+}
+
+export function cancelAllDownloads(): void {
+  for (const song of pending) active.delete(song.id);
+  pending.length = 0;
+  current?.controller.abort();
+  emit();
 }
 
 export async function removeDownload(songId: string): Promise<void> {
+  cancelDownload(songId);
   if (!isSupported()) return;
   const record = index[songId];
+  if (!record) return;
   const keys = [keyFor(songId)];
   // Only drop the cover if no other downloaded track still uses it.
-  const cover = record?.song.coverArt;
+  const cover = record.song.coverArt;
   if (cover && !Object.values(index).some((r) => r.song.id !== songId && r.song.coverArt === cover)) {
     keys.push(artKeyFor(cover));
   }
@@ -252,7 +374,12 @@ export async function removeDownload(songId: string): Promise<void> {
   emit();
 }
 
+export async function removeDownloads(songIds: string[]): Promise<void> {
+  for (const id of songIds) await removeDownload(id);
+}
+
 export async function removeAllDownloads(): Promise<void> {
+  cancelAllDownloads();
   if (!isSupported()) return;
   await idbClear().catch(() => {});
   index = {};
@@ -261,7 +388,7 @@ export async function removeAllDownloads(): Promise<void> {
 }
 
 /**
- * A blob URL for a downloaded track, or null if it is not cached.
+ * A blob URL for a downloaded track, or null if it is not stored.
  * Callers own the URL and must revoke it when they are done.
  */
 export async function localStreamUrl(songId: string): Promise<string | null> {
@@ -275,7 +402,7 @@ export async function localStreamUrl(songId: string): Promise<string | null> {
 }
 
 /**
- * Cached artwork, by cover id. Used as a fallback when the network copy will
+ * Stored artwork, by cover id. Used as a fallback when the network copy will
  * not load, which is exactly the offline case.
  */
 export async function localArtUrl(coverArt: string): Promise<string | null> {
@@ -291,6 +418,10 @@ export async function localArtUrl(coverArt: string): Promise<string | null> {
 /** Rough disk headroom, when the browser is willing to say. */
 export async function storageEstimate(): Promise<{ usage: number; quota: number } | null> {
   if (!navigator.storage?.estimate) return null;
-  const estimate = await navigator.storage.estimate();
-  return { usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 };
+  try {
+    const estimate = await navigator.storage.estimate();
+    return { usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 };
+  } catch {
+    return null;
+  }
 }
