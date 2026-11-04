@@ -243,6 +243,20 @@
   }
 }
 
+/* Tablets in the phone layout: more, smaller cards than a phone. */
+@media (min-width: 600px) and (max-width: 899px) {
+  :root {
+    --card-min: 160px;
+    --shelf-card: clamp(150px, 24vw, 210px);
+  }
+  :root[data-grid='s'] {
+    --card-min: 128px;
+  }
+  :root[data-grid='l'] {
+    --card-min: 210px;
+  }
+}
+
 @media (max-width: 420px) {
   :root {
     --shelf-card: 44vw;

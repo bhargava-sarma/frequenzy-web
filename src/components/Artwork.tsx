@@ -44,39 +44,35 @@ export const Artwork = memo(function Artwork({
   coverArt, name, size, className = '', round, children, style, eager,
 }: ArtworkProps) {
   const remote = coverArt ? coverArtUrl(coverArt, requestSize(size)) : '';
-  const [src, setSrc] = useState(remote);
-  const [loaded, setLoaded] = useState(false);
-  const objectUrl = useRef<string | null>(null);
-  const triedLocal = useRef(false);
+  // Everything below is keyed to the URL it belongs to, so a new cover never
+  // inherits the old one's state. (Resetting in an effect raced the browser: a
+  // cached image could finish loading before the reset ran, and then sat
+  // hidden behind the placeholder for good.)
+  const [local, setLocal] = useState<{ for: string; url: string } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState('');
+  const src = !remote || failed === remote ? '' : local?.for === remote ? local.url : remote;
+  const loaded = src !== '' && loadedSrc === src;
+  const triedLocal = useRef<string | null>(null);
 
+  // An object URL lives exactly as long as it is the one in use.
   useEffect(() => {
-    setSrc(remote);
-    setLoaded(false);
-    triedLocal.current = false;
-  }, [remote]);
-
-  useEffect(
-    () => () => {
-      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-    },
-    [],
-  );
+    if (!local) return;
+    const url = local.url;
+    return () => URL.revokeObjectURL(url);
+  }, [local]);
 
   const onError = () => {
-    setLoaded(false);
-    if (!coverArt || triedLocal.current) {
-      setSrc('');
+    const forRemote = remote;
+    if (!coverArt || triedLocal.current === forRemote || src !== forRemote) {
+      setFailed(forRemote);
       return;
     }
-    triedLocal.current = true;
-    void localArtUrl(coverArt).then((local) => {
-      if (!local) {
-        setSrc('');
-        return;
-      }
-      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-      objectUrl.current = local;
-      setSrc(local);
+    // The server is out of reach: use the copy stored with a download, if any.
+    triedLocal.current = forRemote;
+    void localArtUrl(coverArt).then((url) => {
+      if (url) setLocal({ for: forRemote, url });
+      else setFailed(forRemote);
     });
   };
 
@@ -94,7 +90,7 @@ export const Artwork = memo(function Artwork({
           loading={eager ? 'eager' : 'lazy'}
           decoding="async"
           draggable={false}
-          onLoad={() => setLoaded(true)}
+          onLoad={(event) => setLoadedSrc(event.currentTarget.getAttribute('src') ?? '')}
           onError={onError}
         />
       )}

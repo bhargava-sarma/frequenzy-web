@@ -1754,12 +1754,13 @@ class PlayerEngine {
     this.pause();
     this.original = null;
     const items = songs.map((song) => this.item(song));
+    const at = Math.min(Math.max(0, index), items.length - 1);
     this.loadToken += 1;
     this.unload(0);
     this.unload(1);
-    this.commit({ queue: items, index: Math.min(Math.max(0, index), items.length - 1), shuffle: false, context });
+    this.commit({ queue: items, index: at, shuffle: false, context });
     this.progress.set({ time, buffered: 0 });
-    this.store.set({ duration: items[index]?.song.duration ?? 0 });
+    this.store.set({ duration: items[at]?.song.duration ?? 0 });
     this.updateMediaMetadata();
   }
 }

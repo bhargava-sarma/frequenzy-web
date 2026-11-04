@@ -92,6 +92,9 @@ export function getQueryData<T>(key: string): T | undefined {
 /** Write straight into the cache — used for optimistic edits. */
 export function setQueryData<T>(key: string, updater: T | ((previous: T | undefined) => T)): void {
   const entry = entryFor(key);
+  // A fetch already in flight started before this edit; letting it land would
+  // briefly undo the edit. Its caller still gets its answer — the cache does not.
+  entry.promise = undefined;
   entry.data =
     typeof updater === 'function' ? (updater as (previous: T | undefined) => T)(entry.data as T | undefined) : updater;
   entry.updatedAt = Date.now();

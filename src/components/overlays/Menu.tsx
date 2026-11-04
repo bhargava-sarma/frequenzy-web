@@ -239,6 +239,10 @@ function MenuRow({
 function ActionSheet({ request }: { request: MenuRequest }) {
   const { top, depth, push, pop } = useLevels(request);
   const [closing, setClosing] = useState(false);
+  // The finger that long-pressed to open the sheet is still down; when it
+  // lifts, the browser sends a click to whatever is now under it — the
+  // backdrop, or an item. Only clicks from a touch that began on the sheet count.
+  const armed = useRef(false);
 
   const dismiss = useCallback(() => {
     setClosing(true);
@@ -254,7 +258,7 @@ function ActionSheet({ request }: { request: MenuRequest }) {
   }, [dismiss]);
 
   const run = (item: MenuItem) => {
-    if (item.disabled) return;
+    if (!armed.current || item.disabled) return;
     if (item.submenu) {
       push(item);
       return;
@@ -269,8 +273,14 @@ function ActionSheet({ request }: { request: MenuRequest }) {
   return createPortal(
     <div
       className={`sheet-backdrop ${closing ? 'is-closing' : ''}`}
+      onPointerDown={() => {
+        armed.current = true;
+      }}
+      onKeyDown={() => {
+        armed.current = true;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) dismiss();
+        if (armed.current && event.target === event.currentTarget) dismiss();
       }}
     >
       <div className={`sheet ${closing ? 'is-closing' : ''}`} role="menu">
@@ -293,7 +303,7 @@ function ActionSheet({ request }: { request: MenuRequest }) {
           </div>
         )}
         {depth > 1 && (
-          <button type="button" className="sheet__back" onClick={pop}>
+          <button type="button" className="sheet__back" onClick={() => armed.current && pop()}>
             <ChevronLeftIcon />
             <span className="truncate">{top.title}</span>
           </button>
@@ -326,7 +336,7 @@ function ActionSheet({ request }: { request: MenuRequest }) {
             );
           })}
         </div>
-        <button type="button" className="sheet__cancel key key--lg" onClick={dismiss}>
+        <button type="button" className="sheet__cancel key key--lg" onClick={() => armed.current && dismiss()}>
           cancel
         </button>
       </div>

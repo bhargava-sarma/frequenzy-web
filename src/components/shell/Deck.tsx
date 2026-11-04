@@ -7,6 +7,7 @@
  */
 
 import { Artwork } from '../Artwork';
+import { albumPath, artistPath, InlineLink } from '../InlineLink';
 import { FKey, Knob, Marquee } from '../controls';
 import {
   ChevronUpIcon, EllipsisIcon, HeartIcon, InfinityIcon, InfoIcon, LyricsIcon, QueueIcon,
@@ -82,16 +83,9 @@ function DeckScreen() {
         </Marquee>
         <div className="lcd__sub truncate">
           {current.artistId ? (
-            <button
-              type="button"
-              className="lcd__link"
-              onClick={(event) => {
-                event.stopPropagation();
-                act.goToArtist(current);
-              }}
-            >
+            <InlineLink className="lcd__link" to={artistPath(current.artistId)}>
               {songArtist(current)}
-            </button>
+            </InlineLink>
           ) : (
             songArtist(current)
           )}
@@ -99,16 +93,9 @@ function DeckScreen() {
             <>
               <span className="lcd__dot">·</span>
               {current.albumId ? (
-                <button
-                  type="button"
-                  className="lcd__link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    act.goToAlbum(current);
-                  }}
-                >
+                <InlineLink className="lcd__link" to={albumPath(current.albumId)}>
                   {current.album}
-                </button>
+                </InlineLink>
               ) : (
                 current.album
               )}

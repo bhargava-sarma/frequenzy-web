@@ -25,7 +25,7 @@ import { useDebounced } from '../hooks/useDebounced';
 import { usePaged } from '../hooks/usePaged';
 import { useItemMenu } from '../hooks/useItemMenu';
 import * as act from '../state/actions';
-import { usePlaylists, usePlaylistsLoaded } from '../state/library';
+import { library, usePlaylists, usePlaylistsLoaded } from '../state/library';
 import { albumHeader, albumMenu, artistHeader, artistMenu } from '../state/menus';
 import { useSetting } from '../state/settings';
 import { ui } from '../state/ui';
@@ -492,6 +492,7 @@ export function Playlists() {
       title="playlists"
       eyebrow="library"
       meta={playlists.length ? formatCount(playlists.length, 'playlist') : undefined}
+      onRefresh={() => library.loadPlaylists()}
       toolbar={
         <Toolbar
           filter={filter}

@@ -459,11 +459,14 @@ export async function updatePlaylist(
  * reorder, a sort or a de-duplicate is a rewrite: remove every index, then add
  * the new order back. One request each, sent as a form body when long.
  */
-export async function replacePlaylistSongs(playlistId: string, currentCount: number, songIds: string[]): Promise<void> {
-  if (currentCount > 0) {
-    await updatePlaylist(playlistId, { songIndexToRemove: Array.from({ length: currentCount }, (_, i) => i) });
-  }
-  if (songIds.length > 0) await updatePlaylist(playlistId, { songIdToAdd: songIds });
+/**
+ * Replace a playlist's tracks in one request. `createPlaylist` with an id
+ * updates that playlist, swapping its whole track list in a single
+ * transaction — unlike "remove every index, then add", which corrupts the
+ * playlist whenever the count it was given is out of date.
+ */
+export async function replacePlaylistSongs(playlistId: string, songIds: string[]): Promise<void> {
+  await request('createPlaylist.view', { playlistId, songId: songIds });
 }
 
 export async function deletePlaylist(id: string): Promise<void> {

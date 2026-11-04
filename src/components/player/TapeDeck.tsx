@@ -57,8 +57,14 @@ export function TapeDeck() {
   // A small pack spins faster than a full one for the same tape speed.
   const leftSpeed = Math.max(0.9, (left / R_MAX) * 3.2);
   const rightSpeed = Math.max(0.9, (right / R_MAX) * 3.2);
-  const title = current.title.length > 34 ? `${current.title.slice(0, 33)}…` : current.title;
-  const artist = songArtist(current);
+  // The label holds about 20 characters of the dot face, or 27 set smaller;
+  // anything longer is cut with an ellipsis, and the label clips as a backstop.
+  const chars = Array.from(current.title);
+  const long = chars.length > 20;
+  const room = long ? 27 : 20;
+  const title = chars.length > room ? `${chars.slice(0, room - 1).join('')}…` : current.title;
+  const artistChars = Array.from(songArtist(current));
+  const artist = artistChars.length > 42 ? `${artistChars.slice(0, 41).join('')}…` : artistChars.join('');
 
   return (
     <div className="tape" role="img" aria-label={`Cassette: ${current.title}`}>
@@ -68,6 +74,9 @@ export function TapeDeck() {
             <rect x="0" y="0" width="400" height="252" fill="#fff" />
             <rect x="92" y="148" width="216" height="62" rx="31" fill="#000" />
           </mask>
+          <clipPath id="tape-label-text">
+            <rect x="36" y="42" width="328" height="88" />
+          </clipPath>
         </defs>
 
         <rect x="4" y="4" width="392" height="244" rx="20" className="tape__inside" />
@@ -84,8 +93,14 @@ export function TapeDeck() {
         <rect x="28" y="22" width="344" height="18" rx="9" className="tape__label-band" />
         <text x="44" y="35" className="tape__side">SIDE A</text>
         <text x="356" y="35" textAnchor="end" className="tape__side">{radio ? 'LIVE' : 'C-60'}</text>
-        <text x="44" y="76" className="tape__title">{title}</text>
-        <text x="44" y="100" className="tape__artist">{artist.length > 44 ? `${artist.slice(0, 43)}…` : artist}</text>
+        <g clipPath="url(#tape-label-text)">
+          <text x="44" y="76" className={`tape__title ${long ? 'is-long' : ''}`}>
+            {title}
+          </text>
+          <text x="44" y="100" className="tape__artist">
+            {artist}
+          </text>
+        </g>
         <text x="356" y="124" textAnchor="end" className="tape__time">
           {radio ? 'on air' : `${formatTime(time)} / ${formatTime(duration)}`}
         </text>

@@ -6,7 +6,7 @@
  * folds away underneath, one tap from coming back.
  */
 
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Artwork } from '../Artwork';
 import { Eq } from '../controls';
@@ -53,6 +53,13 @@ export function QueueList({ variant = 'panel' }: { variant?: 'panel' | 'full' })
     scroller: scrollRef,
     onReorder: (from, to) => player.move(index + 1 + from, index + 1 + to),
   });
+  // A track change (or the queue growing or shrinking) mid-drag shifts every
+  // row under the finger; dropping then would move the wrong song.
+  const cancelReorder = reorder.cancel;
+  useEffect(() => {
+    cancelReorder();
+  }, [cancelReorder, index, upcoming.length]);
+
   const virtual = upcoming.length > VIRTUAL_AFTER && !reorder.state;
   const range = useVirtualRows(upcoming.length, rowHeight, listRef, virtual, 8, scrollRef);
 
