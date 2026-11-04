@@ -1003,6 +1003,26 @@
   mask: radial-gradient(circle, transparent 4.5px, #000 5px);
 }
 
+/* ---------------------------------------------------------------- marquee */
+
+/* Always one line. When it does not fit, it glides to the end and back,
+   like a scrolling display, instead of wrapping and pushing things down. */
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.marquee > span {
+  display: inline-block;
+  padding-right: 2px;
+}
+
+.marquee > span.is-moving {
+  animation: fz-marquee 10s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
 /* ----------------------------------------------------------- stars input */
 
 .stars {

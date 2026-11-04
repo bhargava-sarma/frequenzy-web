@@ -32,6 +32,11 @@
 
 .fp--compact {
   animation: fz-sheet-up 300ms var(--ease-out);
+  /* Every drag on the sheet is ours: pull down to dismiss, flick the artwork
+     to skip. Left to the browser, a vertical drag starts a pan and cancels the
+     gesture. The lyrics and queue scroll on their own — touch-action stops at
+     the nearest scroller. */
+  touch-action: none;
 }
 
 .fp--compact.is-closing {
@@ -129,10 +134,6 @@
   margin: 0 auto;
 }
 
-.fp--wide .fp__main {
-  flex: 0 1 560px;
-  margin: 0;
-}
 
 .fp__display {
   display: flex;
@@ -244,10 +245,6 @@
   gap: 6px 10px;
 }
 
-.fp__flags {
-  display: none;
-}
-
 .fp__volume {
   display: flex;
   align-items: center;
@@ -346,24 +343,108 @@
   justify-content: flex-start;
 }
 
-@media (max-width: 1100px) {
-  .fp--wide .fp__body {
-    gap: 24px;
-    padding: 0 24px 22px;
+/*
+ * Desktop: the record and its panel as one centred composition that scales
+ * with the window. The artwork is sized from the height, so the whole record
+ * column always fits; the panel takes the room beside it and is exactly as
+ * tall as that column, so the two read as a pair at any size.
+ */
+.fp--wide {
+  --fp-art: clamp(240px, calc(100vh - 380px), 760px);
+  --fp-col: max(var(--fp-art), 320px);
+  --fp-gap: clamp(32px, 4vw, 96px);
+  --fp-pad: clamp(24px, 4vw, 80px);
+}
+
+@supports (height: 100dvh) {
+  .fp--wide {
+    --fp-art: clamp(240px, calc(100dvh - 380px), 760px);
   }
 }
 
-@media (min-width: 1400px) {
-  .fp--wide .fp__flags {
-    display: inline-flex;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--ink-3);
+.fp--wide .fp__body {
+  display: grid;
+  grid-template-columns: var(--fp-col) minmax(0, 1040px);
+  justify-content: center;
+  align-content: center;
+  align-content: safe center;
+  column-gap: var(--fp-gap);
+  padding: 4px var(--fp-pad) 36px;
+  overflow-y: auto;
+}
+
+.fp--wide .fp__main {
+  max-width: none;
+  margin: 0;
+  justify-content: flex-start;
+}
+
+.fp--wide .fp__display {
+  flex: none;
+  height: var(--fp-art);
+}
+
+.fp--wide .fp__art {
+  width: var(--fp-art);
+  border-radius: 12px;
+}
+
+.fp--wide .tape {
+  width: min(100%, calc(var(--fp-art) * 1.5));
+}
+
+.fp--wide .fp__title {
+  font-size: clamp(22px, 1.5vw, 30px);
+}
+
+.fp--wide .fp__artist {
+  font-size: clamp(14px, 0.95vw, 17px);
+}
+
+/* The volume fader gives way first, so the keys never wrap to a second row. */
+.fp--wide .fp__utils {
+  flex-wrap: nowrap;
+}
+
+.fp--wide .fp__volume {
+  flex: 0 1 220px;
+  width: auto;
+  min-width: 110px;
+}
+
+/* Lyrics grow with the panel they sit in. */
+.fp--wide .lyrics--full.lyrics--s {
+  --lyric-size: clamp(20px, 1.35vw, 28px);
+}
+.fp--wide .lyrics--full.lyrics--m {
+  --lyric-size: clamp(26px, 1.8vw, 36px);
+}
+.fp--wide .lyrics--full.lyrics--l {
+  --lyric-size: clamp(32px, 2.3vw, 46px);
+}
+
+.fp--wide .fp__side {
+  max-width: none;
+  /* Contributes no height of its own: the row is as tall as the record
+     column, and the panel stretches to match it. */
+  contain: size;
+  align-self: stretch;
+}
+
+@media (max-height: 720px) {
+  .fp--wide {
+    --fp-art: clamp(200px, calc(100vh - 340px), 760px);
   }
-  .fp--wide .fp__flags .flag.is-on {
-    color: var(--accent-ink);
+  @supports (height: 100dvh) {
+    .fp--wide {
+      --fp-art: clamp(200px, calc(100dvh - 340px), 760px);
+    }
+  }
+  .fp--wide .fp__main {
+    gap: 12px;
+  }
+  .fp--wide .fp__body {
+    padding-bottom: 20px;
   }
 }
 
@@ -461,6 +542,10 @@
   font-size: 24px;
   font-weight: 800;
   fill: var(--on-accent);
+}
+
+.tape__title.is-long {
+  font-size: 18px;
 }
 
 .tape__artist {
@@ -567,7 +652,7 @@
 }
 
 .lyrics__pad {
-  height: 30%;
+  height: 22%;
 }
 
 .lyrics__pad--end {

@@ -357,7 +357,7 @@ export async function removeDuplicates(playlist: { id: string; name: string }): 
       ui.toast('no duplicates found');
       return;
     }
-    await library.replacePlaylistSongs(playlist.id, songs.length, unique.map((s) => s.id));
+    await library.replacePlaylistSongs(playlist.id, unique.map((s) => s.id));
     ui.toast(`removed ${plural(removed, 'duplicate')}`);
   } catch {
     ui.error("couldn't tidy the playlist");
@@ -382,7 +382,7 @@ export async function sortPlaylist(playlist: { id: string; name: string }, by: P
       case 'reverse': sorted = [...songs].reverse(); break;
       default: sorted = shuffled(songs);
     }
-    await library.replacePlaylistSongs(playlist.id, songs.length, sorted.map((s) => s.id));
+    await library.replacePlaylistSongs(playlist.id, sorted.map((s) => s.id));
     ui.toast(by === 'shuffle' ? 'shuffled the playlist' : by === 'reverse' ? 'reversed the playlist' : `sorted by ${by}`);
   } catch {
     ui.error("couldn't sort the playlist");

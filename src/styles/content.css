@@ -1562,28 +1562,6 @@
     margin-top: 30px;
   }
 
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 14px;
-  }
-
-  :root[data-grid='s'] .grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px 10px;
-  }
-
-  :root[data-grid='l'] .grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .songtiles {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
   .detail {
     flex-direction: column;
@@ -1659,5 +1637,32 @@
   .rank:active,
   .picklist__row:active {
     background: var(--hover);
+  }
+}
+
+/* Phones: a fixed number of columns reads better than auto-fill on a narrow
+   screen. Tablets keep auto-fill, with the card size set in tokens.css. */
+@media (max-width: 599px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 14px;
+  }
+
+  :root[data-grid='s'] .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 10px;
+  }
+
+  :root[data-grid='l'] .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .songtiles {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -18,6 +18,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import { Artwork } from './Artwork';
+import { albumPath, InlineLink } from './InlineLink';
 import { Eq } from './controls';
 import {
   AddToQueueIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, CloseIcon, DownloadIcon, EllipsisIcon, GripIcon,
@@ -617,10 +618,12 @@ const TrackRow = memo(function TrackRow(props: TrackRowProps) {
             {badge?.hiRes && !compact && <span className="tag tag--accent track__tag">hi-res</span>}
           </div>
           {(showArtistLine || compact) && (
-            <div className="track__sub truncate">
+            <div className="track__sub">
               {offline && <DownloadIcon className="track__offline" aria-label="downloaded" />}
-              {showArtistLine ? artist : formatTime(song.duration)}
-              {compact && showArtistLine && showAlbum && song.album ? ` · ${song.album}` : ''}
+              <span className="truncate">
+                {showArtistLine ? artist : formatTime(song.duration)}
+                {compact && showArtistLine && showAlbum && song.album ? ` · ${song.album}` : ''}
+              </span>
             </div>
           )}
         </div>
@@ -629,17 +632,9 @@ const TrackRow = memo(function TrackRow(props: TrackRowProps) {
       {!compact && showAlbum && variant !== 'album' && (
         <div className="track__album truncate">
           {song.albumId ? (
-            <button
-              type="button"
-              className="track__link"
-              tabIndex={-1}
-              onClick={(event) => {
-                event.stopPropagation();
-                act.goToAlbum(song);
-              }}
-            >
+            <InlineLink className="track__link" to={albumPath(song.albumId)} tabIndex={-1}>
               {song.album}
-            </button>
+            </InlineLink>
           ) : (
             song.album
           )}

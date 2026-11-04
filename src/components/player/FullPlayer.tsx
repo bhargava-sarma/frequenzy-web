@@ -10,12 +10,13 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 
 import { Artwork } from '../Artwork';
+import { albumPath, artistPath, InlineLink } from '../InlineLink';
 import { FKey, Marquee, Segmented, Slider } from '../controls';
 import {
   ArtworkIcon, ChevronDownIcon, EllipsisIcon, HeartIcon, InfinityIcon, InfoIcon, LoopIcon, LyricsIcon, MoonIcon,
   QueueIcon, SpeedIcon, TapeIcon, VolumeHighIcon, VolumeLowIcon, VolumeMuteIcon,
 } from '../Icons';
-import { Elapsed, FormatReadout, Remaining, Scrubber, StatusFlags } from './Display';
+import { Elapsed, FormatReadout, Remaining, Scrubber } from './Display';
 import { LyricsView } from './LyricsView';
 import { QueueList } from './QueueList';
 import { TapeDeck } from './TapeDeck';
@@ -296,7 +297,7 @@ function FullPlayer() {
               {display === 'tape' ? (
                 <TapeDeck />
               ) : (
-                <Artwork key={current.coverArt ?? current.id} coverArt={current.coverArt} name={current.title} size={compact ? 360 : 560} className="fp__art" eager />
+                <Artwork key={current.coverArt ?? current.id} coverArt={current.coverArt} name={current.title} size={compact ? 360 : 760} className="fp__art" eager />
               )}
             </div>
           )}
@@ -334,16 +335,9 @@ function Meta({ panel }: { panel: boolean }) {
         </Marquee>
         <div className="fp__artist truncate">
           {current.artistId ? (
-            <button
-              type="button"
-              className="fp__link"
-              onClick={() => {
-                ui.closeFullPlayer();
-                act.goToArtist(current);
-              }}
-            >
+            <InlineLink className="fp__link" to={artistPath(current.artistId)} onNavigate={() => ui.closeFullPlayer()}>
               {songArtist(current)}
-            </button>
+            </InlineLink>
           ) : (
             songArtist(current)
           )}
@@ -351,16 +345,9 @@ function Meta({ panel }: { panel: boolean }) {
             <>
               <span className="fp__dot"> · </span>
               {current.albumId ? (
-                <button
-                  type="button"
-                  className="fp__link"
-                  onClick={() => {
-                    ui.closeFullPlayer();
-                    act.goToAlbum(current);
-                  }}
-                >
+                <InlineLink className="fp__link" to={albumPath(current.albumId)} onNavigate={() => ui.closeFullPlayer()}>
                   {current.album}
-                </button>
+                </InlineLink>
               ) : (
                 current.album
               )}
@@ -416,7 +403,6 @@ function Utilities({ compact, tab }: { compact: boolean; tab: PlayerTab }) {
         onClick={() => player.cycleLoop()}
       />
       <FKey icon={<InfinityIcon />} label="auto" on={autoplay} onClick={() => player.toggleAutoplay()} />
-      {!compact && <StatusFlags className="fp__flags" />}
       {volumeControl && (
         <div className="fp__volume">
           <button type="button" className="ibtn" aria-label={muted ? 'Unmute' : 'Mute'} onClick={() => player.toggleMute()}>

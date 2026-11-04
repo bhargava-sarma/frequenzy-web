@@ -452,5 +452,8 @@ export function useReorder({
     return 0;
   };
 
-  return { state, handleProps, shiftFor };
+  /** Drop the drag without moving anything — the list changed under it. */
+  const cancel = useCallback(() => end(false), [end]);
+
+  return { state, handleProps, shiftFor, cancel };
 }

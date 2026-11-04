@@ -143,8 +143,8 @@ export const library = {
     await library.loadPlaylists();
   },
 
-  async replacePlaylistSongs(playlistId: string, currentCount: number, songIds: string[]): Promise<void> {
-    await api.replacePlaylistSongs(playlistId, currentCount, songIds);
+  async replacePlaylistSongs(playlistId: string, songIds: string[]): Promise<void> {
+    await api.replacePlaylistSongs(playlistId, songIds);
     invalidateQueries(`playlist:${playlistId}`);
     await library.loadPlaylists();
   },

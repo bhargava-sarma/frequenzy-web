@@ -33,6 +33,15 @@ const INTERLUDE_GAP = 6;
 
 const SIZES: LyricsSize[] = ['s', 'm', 'l'];
 
+/**
+ * A line with no letters or digits — empty, "...", "…", "♪" — is a pause in
+ * the singing, not a lyric. It is drawn as a gap (with the interlude dots
+ * when it is current), never as a line of grey punctuation beside them.
+ */
+function isGap(line: LyricLine | undefined): boolean {
+  return !line || !/[\p{L}\p{N}]/u.test(line.text);
+}
+
 export function LyricsView({ song, variant = 'full' }: { song: Song; variant?: 'panel' | 'full' }) {
   const romanization = useSettings((s) => s.romanization);
   const showOriginal = useSettings((s) => s.showOriginalWithRomanization);
@@ -124,7 +133,7 @@ export function LyricsView({ song, variant = 'full' }: { song: Song; variant?: '
       const next = lines[index + 1];
       const from = lines[index]?.time ?? 0;
       const gap = next?.time !== null && next?.time !== undefined ? next.time - from : 0;
-      const resting = gap > INTERLUDE_GAP && (next!.time as number) - t > 1.5 && (index < 0 || !lines[index].text.trim() || t - from > 4);
+      const resting = gap > INTERLUDE_GAP && (next!.time as number) - t > 1.5 && (index < 0 || isGap(lines[index]) || t - from > 4);
       if (resting !== lastInterlude) {
         lastInterlude = resting;
         setInterlude(resting);
@@ -160,7 +169,7 @@ export function LyricsView({ song, variant = 'full' }: { song: Song; variant?: '
     const container = scrollRef.current;
     const line = lineRefs.current[active];
     if (!container || !line) return;
-    const target = line.offsetTop - container.clientHeight * 0.36 + line.offsetHeight / 2;
+    const target = line.offsetTop - container.clientHeight * 0.3 + line.offsetHeight / 2;
     programmatic.current = true;
     container.scrollTo({ top: Math.max(0, target), behavior: document.hidden ? 'auto' : 'smooth' });
     window.setTimeout(() => (programmatic.current = false), 600);
@@ -287,8 +296,7 @@ export function LyricsView({ song, variant = 'full' }: { song: Song; variant?: '
           const isActive = i === active && !interlude;
           const state = isActive ? 'is-active' : i < active ? 'is-past' : '';
           const roman = wantsRoman ? line.romanized : undefined;
-          const blank = !line.text.trim();
-          if (blank) {
+          if (isGap(line)) {
             return (
               <div key={i} ref={(el) => (lineRefs.current[i] = el)} className="lyric-gap">
                 {i === nextIndex - 1 && interlude ? <Dots /> : null}
@@ -297,7 +305,7 @@ export function LyricsView({ song, variant = 'full' }: { song: Song; variant?: '
           }
           return (
             <div key={i} className="lyric-wrap">
-              {interlude && i === nextIndex && lines[active]?.text.trim() !== '' && <Dots />}
+              {interlude && i === nextIndex && (active < 0 || !isGap(lines[active])) && <Dots />}
               <button
                 type="button"
                 ref={(el) => (lineRefs.current[i] = el)}

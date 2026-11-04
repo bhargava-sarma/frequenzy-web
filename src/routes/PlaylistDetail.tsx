@@ -81,12 +81,11 @@ export function PlaylistDetail({ id }: { id: string }) {
   };
 
   const reorder = (from: number, to: number) => {
-    const before = [...songs];
     const next = [...songs];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     setLocal(next);
-    enqueue(() => replacePlaylistSongs(id, before.length, next.map((s) => s.id)), "couldn't save the new order");
+    enqueue(() => replacePlaylistSongs(id, next.map((s) => s.id)), "couldn't save the new order");
   };
 
   /** `indices` are positions in the (unfiltered) list, highest first. */
@@ -105,9 +104,8 @@ export function PlaylistDetail({ id }: { id: string }) {
           const restored = [...next];
           const sorted = [...indices].sort((a, b) => a - b);
           for (const index of sorted) restored.splice(index, 0, songs[index]);
-          const count = next.length;
           setLocal(restored);
-          enqueue(() => replacePlaylistSongs(id, count, restored.map((s) => s.id)), "couldn't undo");
+          enqueue(() => replacePlaylistSongs(id, restored.map((s) => s.id)), "couldn't undo");
         },
       },
     });
